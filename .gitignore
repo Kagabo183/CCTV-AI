@@ -1,0 +1,18 @@
+# Python
+backend/.venv/
+__pycache__/
+.pytest_cache/
+backend/.env
+backend/.video_work/
+backend/uploads/
+backend/sample_videos/*
+!backend/sample_videos/.gitkeep
+*.db
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/.env*
+!frontend/.env.example
+
+.DS_Store

@@ -1,0 +1,50 @@
+# Local stack: Postgres + Redis + backend + frontend.
+#   cp backend/.env.example backend/.env   (add GEMINI_API_KEY when available)
+#   docker compose up --build
+# Open http://localhost:3000
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: visionary
+      POSTGRES_PASSWORD: visionary
+      POSTGRES_DB: visionary
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visionary"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://visionary:visionary@postgres:5432/visionary
+      REDIS_URL: redis://redis:6379/0
+      LOCAL_VIDEO_DIR: /data/sample_videos
+      VIDEO_WORK_DIR: /tmp/video_work
+    volumes:
+      - ./backend/sample_videos:/data/sample_videos:ro
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports: ["3000:3000"]
+    depends_on: [backend]
+
+volumes:
+  pgdata:

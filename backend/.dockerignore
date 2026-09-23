@@ -1,0 +1,8 @@
+.venv
+.env
+__pycache__
+.pytest_cache
+.video_work
+sample_videos
+*.db
+uploads
