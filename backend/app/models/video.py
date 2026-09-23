@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Float, ForeignKey, Index, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, IdMixin, TimestampMixin, utcnow
@@ -28,6 +28,10 @@ class VideoSourceRecord(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | ready | error
     status_message: Mapped[str | None] = mapped_column(Text)
     source_metadata: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    # Zones/tripwires/rule thresholds for the local event engine (normalised coordinates).
+    scene_config: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    # Wall-clock time of the first frame, when known: lets "saa munani" map to video time.
+    recorded_start_at: Mapped[datetime | None]
     last_validated_at: Mapped[datetime | None]
 
 
@@ -65,7 +69,13 @@ class VideoEvent(IdMixin, Base):
     video_source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("video_sources.id", ondelete="CASCADE"), index=True)
     video_session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("video_sessions.id", ondelete="SET NULL"))
     analysis_request_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("analysis_requests.id", ondelete="SET NULL"))
+    vision_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vision_runs.id", ondelete="CASCADE"), index=True)
     event_type: Mapped[str] = mapped_column(String(48))
+    # detection | tracking | rule | model_interpretation (see app/vision/types.py)
+    evidence_level: Mapped[str] = mapped_column(String(24), default="model_interpretation")
+    object_class: Mapped[str | None] = mapped_column(String(32))
+    track_id: Mapped[int | None] = mapped_column(Integer)
+    zone: Mapped[str | None] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text)
     start_time: Mapped[float | None] = mapped_column(Float)
     end_time: Mapped[float | None] = mapped_column(Float)

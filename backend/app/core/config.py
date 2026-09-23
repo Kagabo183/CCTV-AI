@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     redis_url: str | None = "redis://localhost:6379/0"
 
     # Video analyzer
-    video_analyzer_provider: Literal["auto", "gemini", "mock"] = "auto"
+    # auto -> agent (local vision + Gemini escalation) when Gemini is configured and vision is enabled,
+    #         gemini when only Gemini is configured, otherwise mock.
+    video_analyzer_provider: Literal["auto", "agent", "gemini", "mock"] = "auto"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3.6-flash"
     gemini_timeout_seconds: int = 180
@@ -49,6 +51,21 @@ class Settings(BaseSettings):
     enable_local_video_sources: bool = False
     local_video_dir: Path = Path("./sample_videos")
     video_work_dir: Path = Path("./.video_work")
+
+    # Local vision engine (detector -> tracker -> event engine). See docs/VISION_BENCHMARK.md.
+    vision_enabled: bool = True
+    vision_detector: Literal["yolo", "rtdetr"] = "yolo"
+    vision_weights: str | None = None  # default per detector: yolo26s.pt / rtdetr-l.pt
+    vision_tracker: Literal["bytetrack", "botsort"] = "bytetrack"
+    vision_device: str = "auto"  # auto | cuda:0 | cpu
+    vision_sample_fps: float = 10.0
+    vision_confidence: float = 0.25
+    vision_weights_dir: Path = Path("./models")
+    vision_artifacts_dir: Path = Path("./vision_artifacts")  # per-run box tracks for the UI overlay
+
+    # Conversational agent (tool-calling LLM over local event memory; escalates to Gemini video)
+    agent_model: str | None = None  # defaults to GEMINI_MODEL
+    agent_max_steps: int = 6
 
     # Voice
     stt_provider: Literal["mock", "gemini", "http"] = "mock"
@@ -73,7 +90,7 @@ class Settings(BaseSettings):
     def _blank_secret_is_none(cls, value: object) -> object:
         return None if value in ("", None) else value
 
-    @field_validator("gemini_video_fps", "stt_http_url", "tts_http_url", "tts_voice", mode="before")
+    @field_validator("gemini_video_fps", "stt_http_url", "tts_http_url", "tts_voice", "vision_weights", "agent_model", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         return None if value == "" else value
@@ -83,9 +100,11 @@ class Settings(BaseSettings):
         return self.gemini_api_key is not None and bool(self.gemini_api_key.get_secret_value())
 
     @property
-    def resolved_analyzer_provider(self) -> Literal["gemini", "mock"]:
+    def resolved_analyzer_provider(self) -> Literal["agent", "gemini", "mock"]:
         if self.video_analyzer_provider == "auto":
-            return "gemini" if self.gemini_configured else "mock"
+            if not self.gemini_configured:
+                return "mock"
+            return "agent" if self.vision_enabled else "gemini"
         return self.video_analyzer_provider
 
     @property

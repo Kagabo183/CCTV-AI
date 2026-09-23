@@ -13,3 +13,4 @@ PyJWT>=2.8
 bcrypt>=4.1
 python-multipart>=0.0.9
 google-genai>=1.0
+tzdata>=2024.1  # IANA time zones on Windows (Africa/Kigali)

@@ -8,6 +8,7 @@ response shapes may leak past its implementation.
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Literal
@@ -31,6 +32,7 @@ class ConversationTurn(BaseModel):
 class SourceContext(BaseModel):
     """What the analyzer is told about the camera/video it is looking at."""
 
+    source_id: uuid.UUID | None = None  # lets tool-using analyzers query stored vision data
     name: str
     location: str | None = None
     kind: str
@@ -45,7 +47,8 @@ class AnalysisQuery(BaseModel):
     history: list[ConversationTurn] = Field(default_factory=list)
     # Carried-over context: entities being discussed, focus times, prior events.
     context_notes: list[str] = Field(default_factory=list)
-    window: TimeWindow | None = None
+    window: TimeWindow | None = None  # restrict analysis to part of the media (seconds)
+    user_id: uuid.UUID | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -67,12 +70,14 @@ class DetectedEvent(BaseModel):
     start_seconds: float | None = None
     end_seconds: float | None = None
     confidence: float | None = None
+    evidence_level: str = "model_interpretation"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Evidence(BaseModel):
     description: str
     timestamp_seconds: float | None = None
+    level: str | None = None  # detection | tracking | rule | model_interpretation
 
 
 class Usage(BaseModel):
@@ -95,6 +100,7 @@ class AnalysisResult(BaseModel):
     model: str | None = None
     usage: Usage = Field(default_factory=Usage)
     raw: dict[str, Any] | None = None  # provider payload, kept only for debugging
+    trace: dict[str, Any] = Field(default_factory=dict)  # how the answer was produced (tools used, escalation)
 
 
 # ---------------------------------------------------------------------------

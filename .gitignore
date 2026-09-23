@@ -16,3 +16,7 @@ frontend/.env*
 !frontend/.env.example
 
 .DS_Store
+backend/models/
+backend/benchmark_output/
+backend/sample_videos/*.mp4
+backend/vision_artifacts/

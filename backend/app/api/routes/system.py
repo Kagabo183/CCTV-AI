@@ -44,7 +44,7 @@ async def public_config(gw: Gateway) -> PublicConfigOut:
         tts_name, tts_placeholder = "unconfigured", True
     return PublicConfigOut(
         analyzer=analyzer,
-        analyzer_is_mock=analyzer != "gemini",
+        analyzer_is_mock=analyzer in ("mock", "unconfigured"),
         stt_provider=stt_name,
         stt_is_placeholder=stt_placeholder,
         tts_provider=tts_name,

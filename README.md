@@ -36,6 +36,17 @@ No Postgres/Redis handy? You can run with `DATABASE_URL=sqlite+aiosqlite:///./de
 cd backend && .venv/Scripts/python -m pytest
 ```
 
+## Local vision engine (detection → tracking → events)
+
+Runs on the GPU, using pretrained models downloaded on first use:
+```bash
+cd backend
+.venv/Scripts/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130   # match your CUDA; Blackwell needs cu128+
+.venv/Scripts/pip install -r requirements-vision.txt
+.venv/Scripts/python scripts/benchmark_vision.py      # optional: compare YOLO/RT-DETR × ByteTrack/BoT-SORT
+```
+Every uploaded or linked video is analysed automatically, and the **Activity** panel under the player shows the events. See [docs/VISION_BENCHMARK.md](docs/VISION_BENCHMARK.md) for the model comparison.
+
 ## Turning on Gemini
 
 Add to `backend/.env` and restart the backend:

@@ -97,7 +97,9 @@ class ConversationOrchestrator:
         query = AnalysisQuery(
             question=question,
             language=conversation.language,
+            user_id=conversation.user_id,
             source=SourceContext(
+                source_id=source.id,
                 name=source.name,
                 location=source.location,
                 kind=source.kind,
@@ -129,6 +131,7 @@ class ConversationOrchestrator:
                 "model": result.model,
                 "insufficient_evidence": result.insufficient_evidence,
                 "events": [e.model_dump(mode="json") for e in result.events],
+                **result.trace,
             },
         )
         self.db.add(assistant_message)
@@ -215,6 +218,7 @@ class ConversationOrchestrator:
                     video_session_id=session.id,
                     analysis_request_id=request.id,
                     event_type=event.event_type.value,
+                    evidence_level=event.evidence_level,
                     description=event.description,
                     start_time=event.start_seconds,
                     end_time=event.end_seconds,

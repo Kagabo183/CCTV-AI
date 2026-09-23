@@ -4,8 +4,11 @@ import type {
   ConversationDetail,
   PublicConfig,
   User,
+  VideoEvent,
   VideoSession,
   VideoSource,
+  VisionRun,
+  BoxTrack,
 } from "./types";
 
 export class ApiError extends Error {
@@ -76,6 +79,13 @@ export const api = {
   openSource: (id: string) => request<VideoSession>(`/video-sources/${id}/open`, { method: "POST" }),
   session: (sourceId: string, sessionId: string) =>
     request<VideoSession>(`/video-sources/${sourceId}/sessions/${sessionId}`),
+
+  visionRuns: (sourceId: string) => request<VisionRun[]>(`/video-sources/${sourceId}/vision/runs`),
+  runVision: (sourceId: string, detector: string, tracker: string) =>
+    request<VisionRun>(`/video-sources/${sourceId}/vision/run`, { method: "POST", body: json({ detector, tracker }) }),
+  boxes: (sourceId: string, runId: string) => request<BoxTrack>(`/video-sources/${sourceId}/vision/runs/${runId}/boxes`),
+  events: (sourceId: string, runId: string) =>
+    request<VideoEvent[]>(`/video-sources/${sourceId}/events?limit=500&evidence_level=rule&vision_run_id=${runId}`),
 
   conversations: (sourceId: string) => request<Conversation[]>(`/conversations?video_source_id=${sourceId}`),
   conversation: (id: string) => request<ConversationDetail>(`/conversations/${id}`),

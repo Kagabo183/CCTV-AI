@@ -87,6 +87,10 @@ class VideoSessionOut(ApiModel):
 class VideoEventOut(ApiModel):
     id: uuid.UUID
     event_type: str
+    evidence_level: str
+    object_class: str | None
+    track_id: int | None
+    zone: str | None
     description: str
     start_time: float | None
     end_time: float | None

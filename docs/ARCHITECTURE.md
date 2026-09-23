@@ -1,4 +1,43 @@
-# Architecture (Phase 1)
+# Architecture
+
+```
+User (voice/text, Kinyarwanda)
+  → Speech-to-Text (voice/)
+  → ConversationOrchestrator (conversation/)       history, rolling context, camera resolution
+  → VideoAnalyzer = AgentVideoAnalyzer (agent/)    tool-calling LLM (Gemini, text only)
+       ├─ local tools → VisionMemory               events / tracks / scene snapshots in Postgres
+       │                  ↑ written by the local vision engine (vision/):
+       │                    ObjectDetector (YOLO | RT-DETR) → ObjectTracker (ByteTrack | BoT-SORT) → EventEngine
+       └─ analyze_video_clip → GeminiVideoAnalyzer  escalation: deep understanding of a clip
+  → answer + timestamps + evidence (each tagged with its evidence level)
+  → Text-to-Speech → user
+```
+
+The user never talks to YOLO or ByteTrack. The agent chooses tools. The local engine runs once per recorded video (continuously per stream once live cameras arrive), and Gemini only sees video when the agent escalates.
+
+## Local vision engine (`backend/app/vision/`)
+
+| Layer | Module | Output | Evidence level |
+|---|---|---|---|
+| Detection | `detectors.py`: `ObjectDetector` → `YOLODetector` (yolo26s, default) / `RTDETRDetector` | boxes, classes, confidence per frame | `detection` |
+| Tracking | `trackers.py`: `ObjectTracker` → `ByteTrackTracker` (default) / `BoTSORTTracker` | stable track ids over time | `tracking` |
+| Events | `events.py`: `EventEngine` + `SceneConfig` (zones, tripwires, thresholds) | appeared/left, zone or tripwire entry/exit, dwell, loitering (= long time in view), crowd | `rule` |
+| Pipeline | `pipeline.py` | tracks, 1 Hz scene snapshots, events, performance stats | |
+| Service | `services/vision.py` | runs in a worker thread, one job at a time on the GPU; stores `vision_runs`, `object_tracks`, `scene_snapshots`, `video_events` | |
+
+Choose the detector and tracker with `VISION_DETECTOR` and `VISION_TRACKER`. They are alternatives, never run together. The benchmark behind the defaults is in [VISION_BENCHMARK.md](VISION_BENCHMARK.md). Zones are configured per camera through `PUT /api/video-sources/{id}/scene`, in normalised coordinates. Changing them re-runs the analysis.
+
+**Evidence levels** are stored on every event and returned with every answer. The agent's prompt forbids turning `detection`/`tracking`/`rule` evidence into claims about intent or behaviour. Only `model_interpretation` (a vision-language model's description) can describe actions, and it is presented as such. COCO has no classes for fire, smoke, weapons or falls, so those event types stay model-only until a fine-tuned detector exists.
+
+## Conversational agent (`backend/app/agent/`)
+
+Tools (`tools.py`): `list_cameras`, `get_camera_status`, `get_current_objects`, `get_recent_events`, `count_objects`, `get_event_details`, `retrieve_video_clip`, `analyze_video_clip` (escalation), and `final_answer`. Time ranges accept seconds, "last N seconds", or Kigali clock times. Clock times work only when a source has `recorded_start_at`. For recorded video, "now" is the end of the recording.
+
+Escalation happens when the question needs appearance or actions, when local analysis is unavailable (still processing, failed, or a YouTube link the server cannot download), or when the user asks for detail. It sends only the relevant window, using Gemini `VideoMetadata.start_offset`/`end_offset`. Each answer records `tools_used`, `escalated` and `evidence_levels` in the message metadata. The UI shows **local vision** and **Gemini video** badges.
+
+**Cost trade-off:** the agent spends 2–4 short text requests per question instead of one request carrying the whole video. That's far fewer tokens, but more *requests*, which matters on the free tier (20 requests per day per model). Set `AGENT_MODEL` to a lighter model to separate the two quotas.
+
+# Phase 1 foundations
 
 ```
 Browser ──► Next.js (same origin, /api/* proxied) ──► FastAPI
@@ -56,11 +95,12 @@ The frontend never calls Gemini, and no key ever leaves the server.
 - `GEMINI_VIDEO_FPS` lowers frame sampling for long, static CCTV footage.
 - `analysis_requests` records analyzer, model, latency and token counts per question, as the baseline for measuring savings from the local engine.
 
-## Evolving toward the hybrid engine
+## Hybrid engine: status
 
-1. Add `LocalVideoAnalyzer` (YOLO/RT-DETR + ByteTrack + event engine) implementing `VideoAnalyzer` with `capabilities.continuous_events=True`. It writes `video_events` continuously with `detector="local_engine"`.
-2. Add `HybridVideoAnalyzer(local, reasoning=GeminiVideoAnalyzer)`. It answers counting and presence questions from `video_events`, and escalates visual reasoning to Gemini with only the relevant clip (`TimeWindow` → Gemini `VideoMetadata.start_offset/end_offset`).
-3. Register it in `analyzers/factory.py`. The orchestrator, API and frontend don't change.
+Built. The local engine and the tool-calling agent are described at the top of this document. Next steps:
+- Live sources: run the same pipeline continuously on a stream (`live.py`), with the event engine writing `occurred_at`.
+- A local VLM as the escalation target, or as the agent LLM, to cut Gemini usage further.
+- Fine-tuning the detector on footage from your own cameras once the pretrained models show gaps.
 
 ## Adding RTSP / ONVIF / NVR
 
@@ -68,7 +108,7 @@ The `live.py` stubs define the shape. Implement `validate` (probe stream), `acqu
 
 ## Database
 
-Phase 1 tables: `users`, `video_sources`, `video_sessions`, `conversations`, `conversation_messages`, `analysis_requests`, `video_events`. Migrations are in `backend/alembic/versions`.
+Tables: `users`, `video_sources` (+ `scene_config`, `recorded_start_at`), `video_sessions`, `conversations`, `conversation_messages`, `analysis_requests`, `video_events` (+ `evidence_level`, `object_class`, `track_id`, `zone`, `vision_run_id`), `vision_runs`, `object_tracks`, `scene_snapshots`. Migrations are in `backend/alembic/versions` (0001 initial, 0002 local vision).
 
 Planned tables, deliberately not created yet:
 - `cameras`: `video_sources.camera_id` will reference it.

@@ -250,6 +250,7 @@ function AssistantMessage({ message, audio, onSeek }: { message: Message; audio?
             </span>
           )}
           {message.metadata.insufficient_evidence && <span className="text-warn">Not clearly visible</span>}
+          <Provenance message={message} />
           {isMock && <span className="text-warn">mock analyzer</span>}
           {message.evidence.length > 0 && (
             <button onClick={() => setShowEvidence(!showEvidence)} className="hover:text-muted">
@@ -267,6 +268,7 @@ function AssistantMessage({ message, audio, onSeek }: { message: Message; audio?
           <ul className="space-y-1 border-l border-line-2 pl-3 text-xs text-muted">
             {message.evidence.map((e, i) => (
               <li key={i}>
+                {e.level && <span className={`mr-1.5 rounded px-1 py-px text-[10px] ${LEVEL_STYLE[e.level] ?? ""}`}>{LEVEL_LABEL[e.level] ?? e.level}</span>}
                 {e.timestamp_seconds != null && (
                   <button onClick={() => onSeek(e.timestamp_seconds!)} className="mr-1.5 font-mono text-accent/80 hover:text-accent">
                     {formatTime(e.timestamp_seconds)}
@@ -279,6 +281,32 @@ function AssistantMessage({ message, audio, onSeek }: { message: Message; audio?
         )}
       </div>
     </div>
+  );
+}
+
+const LEVEL_LABEL: Record<string, string> = {
+  detection: "detection",
+  tracking: "tracking",
+  rule: "event rule",
+  model_interpretation: "video AI",
+};
+const LEVEL_STYLE: Record<string, string> = {
+  detection: "bg-line-2 text-muted",
+  tracking: "bg-line-2 text-muted",
+  rule: "bg-accent/10 text-accent",
+  model_interpretation: "bg-warn/10 text-warn",
+};
+
+/** Where the answer came from: local vision memory, and/or a video-model escalation. */
+function Provenance({ message }: { message: Message }) {
+  const tools = message.metadata.tools_used;
+  if (!tools) return null;
+  const local = tools.some((t) => t !== "analyze_video_clip");
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`Tools: ${tools.join(", ") || "none"}`}>
+      {local && <span className="rounded bg-accent/10 px-1.5 py-px text-accent">local vision</span>}
+      {message.metadata.escalated && <span className="rounded bg-warn/10 px-1.5 py-px text-warn">Gemini video</span>}
+    </span>
   );
 }
 

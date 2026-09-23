@@ -8,7 +8,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, conversations, system, video_sources, voice
+from app.api.routes import auth, conversations, system, video_sources, vision, voice
 from app.core.cache import close_cache
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, "code": exc.code})
 
     api = APIRouter(prefix="/api")
-    for module in (system, auth, video_sources, conversations, voice):
+    for module in (system, auth, video_sources, vision, conversations, voice):
         api.include_router(module.router)
     app.include_router(api)
     return app

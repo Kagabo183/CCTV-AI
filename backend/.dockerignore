@@ -6,3 +6,6 @@ __pycache__
 sample_videos
 *.db
 uploads
+models
+benchmark_output
+vision_artifacts

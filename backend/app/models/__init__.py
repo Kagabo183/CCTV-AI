@@ -15,6 +15,7 @@ from app.models.analysis import AnalysisRequest
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.user import User
 from app.models.video import VideoEvent, VideoSession, VideoSourceRecord
+from app.models.vision import ObjectTrack, SceneSnapshot, VisionRun
 
 __all__ = [
     "AnalysisRequest",
@@ -24,4 +25,7 @@ __all__ = [
     "VideoEvent",
     "VideoSession",
     "VideoSourceRecord",
+    "VisionRun",
+    "ObjectTrack",
+    "SceneSnapshot",
 ]

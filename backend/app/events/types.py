@@ -28,16 +28,23 @@ class EventType(StrEnum):
     SMOKE = "smoke"
     FALL = "fall"
     LOITERING = "loitering"
+    OBJECT_APPEARED = "object_appeared"
+    OBJECT_DISAPPEARED = "object_disappeared"
+    DWELL_IN_ZONE = "dwell_in_zone"
     OBSERVATION = "observation"  # anything else the analyzer describes
 
 
-# Which analyzers can produce which event types. The future local engine will
-# register e.g. {"local_engine": {PERSON_DETECTED, VEHICLE_DETECTED, ...}}.
-# Types needing zones (RESTRICTED_ZONE_ENTRY) or tracking over time
-# (LOITERING, OBJECT_LEFT) are only reliable once cameras/zones exist.
+# Which analyzers can produce which event types. Types not listed for
+# "local_engine" (fire, smoke, fall, object_left, ...) have no local rule yet:
+# only a vision-language model can report them, as model_interpretation.
 DETECTED_BY: dict[str, frozenset[EventType]] = {
     "gemini": frozenset(EventType),  # best-effort, question-driven, not continuous
     "mock": frozenset({EventType.PERSON_DETECTED, EventType.VEHICLE_DETECTED, EventType.OBSERVATION}),
+    # Local rule engine (app/vision/events.py): geometric/time rules over tracks, continuous.
+    "local_engine": frozenset({
+        EventType.OBJECT_APPEARED, EventType.OBJECT_DISAPPEARED, EventType.PERSON_ENTERED, EventType.PERSON_EXITED,
+        EventType.VEHICLE_ENTERED, EventType.VEHICLE_EXITED, EventType.DWELL_IN_ZONE, EventType.LOITERING, EventType.CROWD_DETECTED,
+    }),
 }
 
 _ALIASES = {

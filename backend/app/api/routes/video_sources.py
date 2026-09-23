@@ -15,6 +15,7 @@ from app.core.errors import AppError, NotFoundError, ValidationFailed
 from app.models import VideoEvent, VideoSession, VideoSourceRecord
 from app.schemas.api import PlaybackOut, VideoEventOut, VideoSessionOut, VideoSourceIn, VideoSourceOut, VideoSourceUpdate
 from app.services.video_sessions import VideoSessionService, schedule_prepare
+from app.services.vision import VisionService, vision_available
 from app.video.gateway import VideoGateway
 from app.video.sources.local_source import LocalFileVideoSource
 from app.video.sources.upload_source import UploadedVideoSource, store_upload
@@ -67,6 +68,8 @@ async def register_source(body: VideoSourceIn, user: CurrentUser, db: DbSession,
     )
     db.add(record)
     await db.commit()
+    if vision_available():
+        await VisionService(db, gw).start(record)  # local detection/tracking/events in the background
     return serialize_source(record, gw)
 
 
@@ -96,6 +99,8 @@ async def upload_source(
     )
     db.add(record)
     await db.commit()
+    if vision_available():
+        await VisionService(db, gw).start(record)  # local detection/tracking/events in the background
     return serialize_source(record, gw)
 
 
@@ -148,6 +153,7 @@ async def open_source(source: OwnedSource, user: CurrentUser, db: DbSession, gw:
     session = await VideoSessionService(db, gw, analyzer).open(source, user.id)
     if session.status == "preparing":
         schedule_prepare(session.id, gw, analyzer)
+    await VisionService(db, gw).ensure(source)
     return session
 
 
@@ -160,10 +166,21 @@ async def get_session(session_id: uuid.UUID, source: OwnedSource, db: DbSession)
 
 
 @router.get("/{source_id}/events", response_model=list[VideoEventOut])
-async def list_events(source: OwnedSource, db: DbSession, event_type: str | None = None, limit: int = 100) -> list[VideoEvent]:
+async def list_events(
+    source: OwnedSource,
+    db: DbSession,
+    event_type: str | None = None,
+    evidence_level: str | None = None,
+    vision_run_id: uuid.UUID | None = None,
+    limit: int = 100,
+) -> list[VideoEvent]:
     query = select(VideoEvent).where(VideoEvent.video_source_id == source.id)
+    if vision_run_id:
+        query = query.where(VideoEvent.vision_run_id == vision_run_id)
     if event_type:
         query = query.where(VideoEvent.event_type == event_type)
+    if evidence_level:
+        query = query.where(VideoEvent.evidence_level == evidence_level)
     rows = await db.execute(query.order_by(VideoEvent.start_time.asc().nulls_last()).limit(min(limit, 500)))
     return list(rows.scalars().all())
 

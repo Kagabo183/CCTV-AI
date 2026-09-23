@@ -1,0 +1,5 @@
+# Local vision engine. Install PyTorch for your GPU first, e.g. (NVIDIA Blackwell / CUDA 13):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+ultralytics>=8.4
+lap>=0.5.12
+psutil>=5.9

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, playBase64Audio } from "@/lib/api";
-import type { Audio, AskResponse, Message, PublicConfig, User, VideoSession, VideoSource } from "@/lib/types";
+import type { Audio, AskResponse, BoxTrack, Message, PublicConfig, User, VideoEvent, VideoSession, VideoSource, VisionRun } from "@/lib/types";
+import { VisionLab } from "./VisionLab";
 import { ChatPanel, type PendingState } from "./ChatPanel";
 import { CameraIcon, XIcon } from "./icons";
 import { Sidebar } from "./Sidebar";
@@ -39,6 +40,11 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
   const [audioByMessage, setAudioByMessage] = useState<Record<string, Audio>>({});
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [runs, setRuns] = useState<VisionRun[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [boxes, setBoxes] = useState<Record<string, BoxTrack>>({});
+  const [showBoxes, setShowBoxes] = useState(true);
+  const [events, setEvents] = useState<VideoEvent[]>([]);
   const stageRef = useRef<VideoStageHandle>(null);
 
   const selectSource = useCallback(async (s: VideoSource) => {
@@ -49,11 +55,19 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
     setMessages([]);
     setConversationId(null);
     setSession(null);
+    setRuns([]);
+    setSelectedRunId(null);
+    setEvents([]);
     try {
       localStorage.setItem(LAST_SOURCE_KEY, s.id);
     } catch {}
     if (s.status !== "ready") return;
-    api.openSource(s.id).then(setSession).catch((e) => setError(e instanceof ApiError ? e.message : "Could not open video"));
+    api.openSource(s.id)
+      .then((sess) => {
+        setSession(sess);
+        return api.visionRuns(s.id).then(setRuns);
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Could not open video"));
     try {
       const [latest] = await api.conversations(s.id);
       if (latest) {
@@ -86,6 +100,35 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
     }, 2000);
     return () => clearInterval(id);
   }, [session, source]);
+
+  // Poll while any local run is queued/running.
+  const runsBusy = runs.some((r) => r.status === "queued" || r.status === "running");
+  useEffect(() => {
+    if (!source || !runsBusy) return;
+    const id = setInterval(() => {
+      api.visionRuns(source.id).then(setRuns).catch(() => undefined);
+    }, 1500);
+    return () => clearInterval(id);
+  }, [source, runsBusy]);
+
+  // Default selection: the assistant's (primary) run, else the first completed one.
+  const completedRuns = runs.filter((r) => r.status === "completed" && r.id);
+  const activeRunId =
+    selectedRunId && completedRuns.some((r) => r.id === selectedRunId)
+      ? selectedRunId
+      : (completedRuns.find((r) => r.is_primary) ?? completedRuns[0])?.id ?? null;
+  const activeRun = completedRuns.find((r) => r.id === activeRunId) ?? null;
+
+  // Events and boxes for the selected run.
+  useEffect(() => {
+    if (!source || !activeRunId) return;
+    api.events(source.id, activeRunId).then(setEvents).catch(() => undefined);
+    if (!boxes[activeRunId]) {
+      api.boxes(source.id, activeRunId)
+        .then((b) => setBoxes((prev) => ({ ...prev, [activeRunId]: b })))
+        .catch(() => undefined);
+    }
+  }, [source, activeRunId, boxes]);
 
   async function ensureConversation(): Promise<string> {
     if (conversationId) return conversationId;
@@ -223,7 +266,33 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
               {source?.location && <p className="text-sm text-muted">Location: {source.location}</p>}
             </div>
           </div>
-          <VideoStage key={source?.id ?? "none"} ref={stageRef} source={source} session={session} analyzerIsMock={config?.analyzer_is_mock ?? false} />
+          <VideoStage
+            key={source?.id ?? "none"}
+            ref={stageRef}
+            source={source}
+            session={session}
+            analyzerIsMock={config?.analyzer_is_mock ?? false}
+            overlay={showBoxes && activeRun && boxes[activeRun.id!] ? { boxes: boxes[activeRun.id!], label: activeRun.label ?? "" } : null}
+          />
+          {source && runs.length > 0 && (
+            <VisionLab
+              runs={runs}
+              selectedRunId={activeRunId}
+              events={activeRunId ? events : []}
+              showBoxes={showBoxes}
+              overlaySupported={source.playback?.type !== "youtube"}
+              onSelectRun={setSelectedRunId}
+              onToggleBoxes={setShowBoxes}
+              onRun={(d, t) =>
+                api
+                  .runVision(source.id, d, t)
+                  .then(() => api.visionRuns(source.id))
+                  .then(setRuns)
+                  .catch((e) => setError(e instanceof ApiError ? e.message : "Could not start analysis"))
+              }
+              onSeek={(s) => stageRef.current?.seek(s)}
+            />
+          )}
         </div>
       </main>
 

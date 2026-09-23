@@ -105,6 +105,8 @@ def _source_context_text(query: AnalysisQuery) -> str:
     lines.append("Type: live camera clip" if src.is_live else "Type: recorded video")
     if src.duration_seconds:
         lines.append(f"Duration: {src.duration_seconds:.0f} seconds")
+    if query.window is not None and (query.window.start is not None or query.window.end is not None):
+        lines.append(f"You are seeing only part of the video: from {query.window.start or 0:.0f}s to {query.window.end if query.window.end is not None else 'the end'}{'s' if query.window.end is not None else ''}. Give timestamps relative to the START OF THE FULL VIDEO.")
     if query.context_notes:
         lines.append("Conversation context so far:\n" + "\n".join(f"- {note}" for note in query.context_notes))
     return "\n".join(lines)
@@ -175,9 +177,17 @@ class GeminiVideoAnalyzer(VideoAnalyzer):
     def build_contents(self, prepared: PreparedVideo, query: AnalysisQuery) -> list[Any]:
         from google.genai import types
 
+        window = query.window
+        offsets: dict[str, Any] = {}
+        if window is not None and window.start is not None:
+            offsets["start_offset"] = f"{max(0.0, window.start):.1f}s"
+        if window is not None and window.end is not None:
+            offsets["end_offset"] = f"{window.end:.1f}s"
+        if self._fps:
+            offsets["fps"] = self._fps
         video_part = types.Part(
             file_data=types.FileData(file_uri=prepared.ref["file_uri"], mime_type=prepared.ref.get("mime_type")),
-            video_metadata=types.VideoMetadata(fps=self._fps) if self._fps else None,
+            video_metadata=types.VideoMetadata(**offsets) if offsets else None,
         )
         contents: list[types.Content] = [
             types.Content(role="user", parts=[video_part, types.Part(text=_source_context_text(query))]),
@@ -287,6 +297,8 @@ def _provider_error(exc: Any) -> ProviderUnavailable:
                 code="provider_daily_quota",
             )
         return ProviderUnavailable("Gemini quota exceeded. Try again in a minute.", code="provider_quota")
+    if code in (503, 529):
+        return ProviderUnavailable("Gemini is overloaded right now (high demand). Please try again in a minute.", code="provider_overloaded")
     if code == 404:
         return ProviderUnavailable("The configured Gemini model is not available. Check GEMINI_MODEL.", code="provider_model_unavailable")
     if code == 400:

@@ -14,6 +14,7 @@ os.environ.update(
     STT_PROVIDER="mock",
     TTS_PROVIDER="mock",
     VIDEO_URL_ALLOWED_DOMAINS="",
+    VISION_ENABLED="false",  # vision tests enable it explicitly with fakes
 )
 
 import httpx
@@ -29,6 +30,7 @@ async def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "upload_dir", tmp_path / "uploads")
+    monkeypatch.setattr(get_settings(), "vision_artifacts_dir", tmp_path / "vision_artifacts")
     eng = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

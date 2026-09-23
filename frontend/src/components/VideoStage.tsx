@@ -2,7 +2,8 @@
 
 import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { formatTime } from "@/lib/api";
-import type { VideoSession, VideoSource } from "@/lib/types";
+import type { BoxTrack, VideoSession, VideoSource } from "@/lib/types";
+import { BoxOverlay } from "./BoxOverlay";
 import { AlertIcon, CameraIcon } from "./icons";
 
 export type VideoStageHandle = { seek: (seconds: number) => void };
@@ -12,10 +13,11 @@ type Props = {
   source: VideoSource | null;
   session: VideoSession | null;
   analyzerIsMock: boolean;
+  overlay?: { boxes: BoxTrack; label: string } | null;
   ref?: Ref<VideoStageHandle>;
 };
 
-export function VideoStage({ source, session, analyzerIsMock, ref }: Props) {
+export function VideoStage({ source, session, analyzerIsMock, overlay, ref }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [youtubeStart, setYoutubeStart] = useState<number | null>(null);
   const [current, setCurrent] = useState(0);
@@ -80,6 +82,7 @@ export function VideoStage({ source, session, analyzerIsMock, ref }: Props) {
             onError={() => setPlayError(true)}
           />
         ) : null}
+        {overlay && playback && playback.type !== "youtube" && !playError && <BoxOverlay videoRef={videoRef} boxes={overlay.boxes} label={overlay.label} />}
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-black/70 to-transparent p-3">
           <div className="flex items-center gap-2 rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-white/90 backdrop-blur">
