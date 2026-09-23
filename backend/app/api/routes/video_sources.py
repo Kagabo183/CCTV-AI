@@ -69,7 +69,7 @@ async def register_source(body: VideoSourceIn, user: CurrentUser, db: DbSession,
     db.add(record)
     await db.commit()
     if vision_available():
-        await VisionService(db, gw).start(record)  # local detection/tracking/events in the background
+        await VisionService(db, gw).ensure(record)  # local detection/tracking/events in the background (skipped for YouTube)
     return serialize_source(record, gw)
 
 
@@ -100,7 +100,7 @@ async def upload_source(
     db.add(record)
     await db.commit()
     if vision_available():
-        await VisionService(db, gw).start(record)  # local detection/tracking/events in the background
+        await VisionService(db, gw).ensure(record)  # local detection/tracking/events in the background (skipped for YouTube)
     return serialize_source(record, gw)
 
 

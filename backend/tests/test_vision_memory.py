@@ -209,3 +209,41 @@ async def test_model_comparison_keeps_runs_side_by_side(client, monkeypatch: pyt
     for task in list(vision_service._tasks):
         await task
     assert len((await client.get(f"/api/video-sources/{sid}/vision/runs", headers=headers)).json()) == 2
+
+
+async def test_youtube_sources_explain_instead_of_failing(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    from app.api.routes import vision as vision_routes
+    from app.services import vision as vision_service
+    from tests.conftest import register
+
+    for module in (vision_service, vision_routes):
+        monkeypatch.setattr(module, "vision_available", lambda settings=None: True)
+    headers = await register(client)
+    r = await client.post("/api/video-sources", json={"name": "yt", "uri": "https://www.youtube.com/watch?v=abc123"}, headers=headers)
+    assert r.status_code == 201, r.text  # registering still works; local analysis is simply skipped
+    sid = r.json()["id"]
+
+    runs = (await client.get(f"/api/video-sources/{sid}/vision/runs", headers=headers)).json()
+    assert runs[0]["status"] == "unsupported" and "upload the video file" in runs[0]["unsupported_reason"]
+    r = await client.post(f"/api/video-sources/{sid}/vision/run", json={"detector": "rtdetr", "tracker": "bytetrack"}, headers=headers)
+    assert r.status_code == 422 and r.json()["code"] == "local_vision_unsupported"
+    assert vision_service._tasks == set()
+
+
+async def test_retry_replaces_failed_run(engine: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+    from app.services import vision as vision_service
+    from app.video.gateway import VideoGateway
+
+    async def boom(run_id, gateway):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(vision_service, "_execute", boom)
+    _, source_id = await seed()
+    async with get_sessionmaker()() as db:
+        source = await db.get(VideoSourceRecord, source_id)
+        db.add(VisionRun(video_source_id=source_id, status="failed", detector="rtdetr", weights="w", tracker="bytetrack", error="x"))
+        await db.commit()
+        await vision_service.VisionService(db, VideoGateway(get_settings())).start(source, "rtdetr", "bytetrack")
+        runs = (await db.execute(__import__("sqlalchemy").select(VisionRun).where(VisionRun.detector == "rtdetr"))).scalars().all()
+        assert [r.status for r in runs] == ["queued"]

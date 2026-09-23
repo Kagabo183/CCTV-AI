@@ -92,7 +92,8 @@ export type PublicConfig = {
 export type VisionRun = {
   id: string | null;
   available: boolean;
-  status: "disabled" | "not_started" | "queued" | "running" | "completed" | "failed";
+  unsupported_reason?: string | null;
+  status: "disabled" | "unsupported" | "not_started" | "queued" | "running" | "completed" | "failed";
   progress: number;
   detector: string | null;
   weights: string | null;

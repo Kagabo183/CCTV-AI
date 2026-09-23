@@ -47,6 +47,15 @@ export function VisionLab({ runs, selectedRunId, events, showBoxes, overlaySuppo
   const [detector, setDetector] = useState("yolo");
   const [tracker, setTracker] = useState("bytetrack");
   if (runs.length === 1 && runs[0].status === "disabled") return null;
+  if (runs.length === 1 && runs[0].status === "unsupported") {
+    return (
+      <section className="rounded-2xl border border-line bg-panel px-4 py-3">
+        <h2 className="text-sm font-semibold">Vision lab</h2>
+        <p className="mt-1 text-sm text-muted">{runs[0].unsupported_reason}</p>
+        <p className="mt-1 text-xs text-faint">Questions in the chat still work: they are answered by Gemini directly from the YouTube link.</p>
+      </section>
+    );
+  }
 
   const real = runs.filter((r) => r.id);
   const completed = real.filter((r) => r.status === "completed");
@@ -129,7 +138,13 @@ export function VisionLab({ runs, selectedRunId, events, showBoxes, overlaySuppo
             )}
           </div>
 
-          {selected?.status === "failed" && <p className="px-4 py-3 text-sm text-danger">{selected.error}</p>}
+          {real
+            .filter((r) => r.status === "failed")
+            .map((r) => (
+              <p key={r.id} className="border-b border-line px-4 py-2 text-xs text-danger">
+                {r.label} failed: {r.error ?? "unknown error"}
+              </p>
+            ))}
           {completed.length > 0 && <Comparison runs={completed} selectedRunId={selectedRunId} />}
           {busy && completed.length === 0 && <p className="px-4 py-3 text-sm text-muted">Analysing… results appear here when the run finishes.</p>}
 

@@ -13,7 +13,7 @@ from app.api.deps import DbSession, Gateway, owned_source
 from app.core.config import get_settings
 from app.core.errors import NotFoundError, ValidationFailed
 from app.models import ObjectTrack, VideoEvent, VideoSourceRecord, VisionRun
-from app.services.vision import VisionService, artifact_path, run_progress, vision_available
+from app.services.vision import VisionService, artifact_path, local_analysis_blocker, run_progress, vision_available
 
 router = APIRouter(prefix="/video-sources/{source_id}", tags=["local vision"])
 OwnedSource = Annotated[VideoSourceRecord, Depends(owned_source)]
@@ -24,6 +24,7 @@ MODEL_LABELS = {"yolo": "YOLO26s", "rtdetr": "RT-DETR-L", "bytetrack": "ByteTrac
 class VisionRunOut(BaseModel):
     id: uuid.UUID | None = None
     available: bool = True
+    unsupported_reason: str | None = None  # e.g. YouTube links: local analysis impossible
     status: str  # disabled | not_started | queued | running | completed | failed
     progress: float = 0.0
     detector: str | None = None
@@ -105,6 +106,10 @@ async def vision_status(source: OwnedSource, db: DbSession, gw: Gateway) -> Visi
 @router.get("/vision/runs", response_model=list[VisionRunOut])
 async def vision_runs(source: OwnedSource, db: DbSession, gw: Gateway) -> list[VisionRunOut]:
     """Every model combination run on this source, for side-by-side comparison."""
+    if not vision_available():
+        return [VisionRunOut(available=False, status="disabled")]
+    if (reason := local_analysis_blocker(source)) is not None:
+        return [VisionRunOut(status="unsupported", unsupported_reason=reason)]
     return [await _describe(db, run) for run in await VisionService(db, gw).runs(source.id)]
 
 
@@ -150,6 +155,6 @@ async def put_scene(body: SceneIn, source: OwnedSource, db: DbSession, gw: Gatew
     source.scene_config = scene.to_dict()
     source.recorded_start_at = body.recorded_start_at
     await db.commit()
-    if body.rerun and vision_available():
+    if body.rerun and vision_available() and local_analysis_blocker(source) is None:
         await VisionService(db, gw).start(source)  # events depend on zones: recompute
     return {**source.scene_config, "recorded_start_at": source.recorded_start_at}

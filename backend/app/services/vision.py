@@ -20,6 +20,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.errors import ValidationFailed
 from app.db.session import get_sessionmaker
 from app.models import ObjectTrack, SceneSnapshot, VideoEvent, VideoSourceRecord, VisionRun
 from app.video.gateway import VideoGateway
@@ -95,6 +96,19 @@ def weights_for(detector: str, settings: Settings) -> str:
     return DEFAULT_WEIGHTS[detector]
 
 
+YOUTUBE_UNSUPPORTED = (
+    "YouTube videos can't be analysed locally: the server never downloads them (only Gemini reads YouTube links). "
+    "To compare detectors on this footage, upload the video file or use a direct link to an MP4."
+)
+
+
+def local_analysis_blocker(source: VideoSourceRecord) -> str | None:
+    """Why local vision cannot run on this source, or None if it can."""
+    if source.source_metadata.get("delivery") == "youtube":
+        return YOUTUBE_UNSUPPORTED
+    return None
+
+
 def artifact_path(run_id: uuid.UUID) -> Path:
     return get_settings().vision_artifacts_dir / f"{run_id}.json"
 
@@ -131,6 +145,14 @@ class VisionService:
         tracker = tracker or s.vision_tracker
         if detector not in DETECTORS or tracker not in TRACKERS:
             raise ValueError(f"Unknown combination {detector}+{tracker}")
+        if (reason := local_analysis_blocker(source)) is not None:
+            raise ValidationFailed(reason, code="local_vision_unsupported")
+        # A new attempt replaces earlier failed attempts of the same combination.
+        await self.db.execute(
+            delete(VisionRun).where(
+                VisionRun.video_source_id == source.id, VisionRun.detector == detector, VisionRun.tracker == tracker, VisionRun.status == "failed"
+            )
+        )
         run = VisionRun(
             video_source_id=source.id,
             status="queued",
@@ -148,7 +170,7 @@ class VisionService:
 
     async def ensure(self, source: VideoSourceRecord) -> VisionRun | None:
         """Start a run unless one exists (queued, running or completed)."""
-        if not vision_available(self.settings):
+        if not vision_available(self.settings) or local_analysis_blocker(source) is not None:
             return None
         latest = await self.latest_run(source.id)
         if latest is not None and latest.status in ("queued", "running", "completed"):
