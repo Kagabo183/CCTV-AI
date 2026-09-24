@@ -18,6 +18,8 @@ source has recorded_start_at.
 
 from __future__ import annotations
 
+import asyncio
+
 import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta
@@ -40,6 +42,13 @@ class ToolError(Exception):
 
 def _r(value: float | None) -> float | None:
     return None if value is None else round(value, 1)
+
+
+def _clock(seconds: float | None) -> str:
+    if seconds is None:
+        return "?"
+    m, s = divmod(int(round(seconds)), 60)
+    return f"{m}:{s:02d}"
 
 
 class VisionMemory:
@@ -155,10 +164,12 @@ class VisionMemory:
         tracks = (
             await self.db.execute(select(ObjectTrack).where(ObjectTrack.vision_run_id == run.id, ObjectTrack.track_id.in_(snap.track_ids or [-1])))
         ).scalars().all()
+        visible = ", ".join(f"{n} {cls}" for cls, n in sorted(snap.counts.items(), key=lambda kv: -kv[1])) or "nothing"
         return {
+            "summary": f"At {_clock(snap.timestamp)}{' (the end of the recording)' if at_seconds is None else ''}: {visible} in view. "
+                       + ("For 'how many at the same time' over the whole video use count_objects instead." if at_seconds is None else ""),
             "evidence_level": "tracking",
             "at_seconds": snap.timestamp,
-            "note": "Recorded video: 'now' is the end of the recording." if at_seconds is None else None,
             "counts": snap.counts,
             "objects": [
                 {"track_id": t.track_id, "class": t.object_class, "visible_since_seconds": _r(t.first_seen), "seconds_in_view_so_far": _r(snap.timestamp - t.first_seen), "confidence": t.mean_confidence}
@@ -186,7 +197,10 @@ class VisionMemory:
         if object_class:
             query = query.where(VideoEvent.object_class == object_class)
         rows = (await self.db.execute(query.order_by(VideoEvent.start_time).limit(_MAX_EVENTS + 1))).scalars().all()
+        kinds = Counter(e.event_type for e in rows)
         return {
+            "summary": f"{len(rows)}{'+' if len(rows) > _MAX_EVENTS else ''} event(s) between {_clock(start)} and {_clock(end)}: "
+                       + (", ".join(f"{n} {k.replace('_', ' ')}" for k, n in kinds.most_common()) or "none") + ".",
             "evidence_level": "rule",
             "range_seconds": [_r(start), _r(end)],
             "truncated": len(rows) > _MAX_EVENTS,
@@ -211,12 +225,21 @@ class VisionMemory:
         for s in snaps:
             for cls, n in s.counts.items():
                 peak[cls] = max(peak[cls], n)
+        distinct = dict(Counter(t.object_class for t in tracks))
+        at_once = {k: v for k, v in peak.items() if not object_class or k == object_class}
+        parts = [
+            f"{cls}: at most {at_once.get(cls, 0)} visible at the same time, {n} separate track(s) in total"
+            for cls, n in sorted(distinct.items(), key=lambda kv: -kv[1]) if cls != "unknown"
+        ]
+        if distinct.get("unknown"):
+            parts.append(f"{distinct['unknown']} object(s) the detector could not identify")
         return {
+            "summary": (f"Between {_clock(start)} and {_clock(end)}: " + "; ".join(parts) + ". "
+                        "'At the same time' is the reliable count; separate tracks over-count objects that leave and come back.") if parts else f"No objects between {_clock(start)} and {_clock(end)}.",
             "evidence_level": "tracking",
             "range_seconds": [_r(start), _r(end)],
-            "distinct_tracks_by_class": dict(Counter(t.object_class for t in tracks)),
-            "max_simultaneously_visible_by_class": {k: v for k, v in peak.items() if not object_class or k == object_class},
-            "caveat": "Distinct tracks can over-count: one person who is hidden and reappears may get a new track id.",
+            "distinct_tracks_by_class": distinct,
+            "max_simultaneously_visible_by_class": at_once,
         }
 
     async def get_event_details(self, event_id: str) -> dict[str, Any]:
@@ -241,6 +264,47 @@ class VisionMemory:
             "description": event.description,
             "rule": event.event_metadata.get("rule"),
         }
+
+    async def list_uncertain_objects(self, camera_id: str | None = None) -> dict[str, Any]:
+        """Tracks the detector could not confidently classify (label 'unknown')."""
+        source = await self._source(camera_id)
+        run = await self._run(source)
+        rows = (
+            await self.db.execute(select(ObjectTrack).where(ObjectTrack.vision_run_id == run.id, ObjectTrack.object_class == "unknown").order_by(ObjectTrack.first_seen))
+        ).scalars().all()
+        return {
+            "evidence_level": "detection",
+            "note": "The detector was not confident about these. Use analyze_video_clip on their time window to find out what they are.",
+            "objects": [
+                {"track_id": t.track_id, "candidate_class": t.track_metadata.get("candidate_class"), "mean_confidence": t.mean_confidence,
+                 "class_votes": t.track_metadata.get("class_votes"), "from_seconds": _r(t.first_seen), "to_seconds": _r(t.last_seen)}
+                for t in rows[:30]
+            ],
+            "total": len(rows),
+        }
+
+    async def local_media_path(self, camera_id: str | None = None) -> "Path | str | None":
+        """The stored video file (or, for online videos, the direct stream URL) for frame-based vision-language models."""
+        from pathlib import Path
+
+        try:
+            source = await self._source(camera_id)
+        except ToolError:
+            return None
+        s = get_settings()
+        stored = source.source_metadata.get("stored_path") or (source.uri if source.kind == "upload" else None)
+        if stored:
+            return (s.upload_dir / stored).resolve()
+        if source.kind == "local":
+            return (s.local_video_dir / source.uri).resolve()
+        from app.video import streaming
+
+        if streaming.is_streamed(source.source_metadata):
+            try:
+                return (await asyncio.to_thread(streaming.resolve, source.uri, min(720, s.video_import_max_height))).url
+            except Exception:  # noqa: BLE001 - the VLM then reports it cannot see the video
+                return None
+        return None
 
     async def retrieve_video_clip(self, camera_id: str | None = None, start_seconds: float = 0.0, end_seconds: float | None = None) -> dict[str, Any]:
         source = await self._source(camera_id)
@@ -286,11 +350,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "parameters": {"type": "object", "properties": {**_CAMERA, "start_seconds": {"type": "number"}, "end_seconds": {"type": "number"}}, "required": ["start_seconds"]},
     },
     {
+        "name": "list_uncertain_objects",
+        "description": "Objects the detector saw but could not confidently classify (label 'unknown', with candidate class and confidence) and when they appear.",
+        "parameters": {"type": "object", "properties": _CAMERA},
+    },
+    {
         "name": "analyze_video_clip",
         "description": (
-            "ESCALATION: send the video (or a time range of it) to a vision-language model for deep understanding: appearance, clothing, colours, "
-            "what objects people carry, actions and interactions, anything not covered by local tracking. Costs more; use when local tools cannot answer "
-            "or local analysis is unavailable. Evidence: model_interpretation."
+            "ESCALATION: send the video (or a time range of it) to a vision-language model for open-ended understanding: what an object or animal is, "
+            "appearance, clothing, colours, what people carry, actions, interactions, what changed, anything outside the detector's class list or "
+            "labelled 'unknown'. Costs more; use when local tools cannot answer or local analysis is unavailable. Evidence: model_interpretation."
         ),
         "parameters": {
             "type": "object",

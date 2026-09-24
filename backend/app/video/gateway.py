@@ -21,8 +21,9 @@ from app.core.errors import NotSupportedYet, ValidationFailed
 from app.video.sources.base import MediaHandle, SourceKind, TimeWindow, VideoSource
 from app.video.sources.live import NvrChannelSource, OnvifCameraSource, RtspCameraSource
 from app.video.sources.local_source import LocalFileVideoSource
-from app.video.sources.upload_source import UploadedVideoSource
+from app.video.sources.upload_source import StoredVideoSource, UploadedVideoSource
 from app.video.sources.url_source import UrlVideoSource
+from app.video.ingest import ImportSettings
 from app.video.url_safety import UrlPolicy
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,22 @@ logger = logging.getLogger(__name__)
 class VideoGateway:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.policy = UrlPolicy(allowed_domains=tuple(settings.video_url_allowed_domains), allow_http=settings.video_url_allow_http)
+        self.policy = UrlPolicy(
+            allowed_domains=tuple(settings.video_url_allowed_domains),
+            allow_http=settings.video_url_allow_http,
+            camera_networks=tuple(settings.camera_private_networks),
+        )
         self.workdir = settings.video_work_dir.resolve()
+
+    def import_settings(self, clip_seconds: float | None = None) -> ImportSettings:
+        s = self.settings
+        return ImportSettings(
+            policy=self.policy,
+            max_bytes=s.max_download_bytes,
+            max_seconds=s.video_import_max_seconds,
+            max_height=s.video_import_max_height,
+            clip_seconds=min(max(clip_seconds or s.live_clip_seconds, 3), 600),
+        )
 
     def enabled_kinds(self) -> list[SourceKind]:
         kinds = [SourceKind.URL]
@@ -48,6 +63,10 @@ class VideoGateway:
         except ValueError as exc:
             raise ValidationFailed(f"Unknown source type: {kind}") from exc
 
+        stored = (metadata or {}).get("stored_path")
+        if stored and source_kind is not SourceKind.UPLOAD:
+            # An imported link: play and analyse the stored MP4, whatever the original was.
+            return StoredVideoSource(source_id, stored, metadata, root=self.settings.upload_dir, kind=source_kind)
         if source_kind is SourceKind.URL:
             return UrlVideoSource(source_id, uri, metadata, policy=self.policy, max_bytes=self.settings.max_download_bytes)
         if source_kind is SourceKind.UPLOAD:

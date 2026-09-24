@@ -13,6 +13,7 @@ _REDACTIONS = [
     (re.compile(r"(key=)[A-Za-z0-9_\-]+", re.IGNORECASE), r"\1[REDACTED]"),
     (re.compile(r"(AIza)[A-Za-z0-9_\-]{20,}"), r"\1[REDACTED]"),
     (re.compile(r"\b(AQ\.)[A-Za-z0-9_\-]{20,}"), r"\1[REDACTED]"),  # Google auth-key format
+    (re.compile(r"([a-z][a-z0-9+.\-]*://)[^/\s:@]+:[^/\s@]+@", re.IGNORECASE), r"\1[REDACTED]@"),  # user:password@ in URLs (camera streams)
     (re.compile(r"(Bearer\s+)[A-Za-z0-9_\-\.]+", re.IGNORECASE), r"\1[REDACTED]"),
     (re.compile(r"([?&](?:token|sig|signature|x-amz-signature|x-goog-signature)=)[^&\s]+", re.IGNORECASE), r"\1[REDACTED]"),
 ]

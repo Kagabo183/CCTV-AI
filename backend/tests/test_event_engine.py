@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.vision.events import EventEngine, EventRules, Line, SceneConfig, Zone
 from app.vision.types import EvidenceLevel, TrackedObject
 
@@ -103,3 +105,52 @@ def test_scene_config_round_trip() -> None:
     scene = SceneConfig(zones=[Zone("gate", [(0, 0), (1, 0), (1, 1)], {"person"})], lines=[Line("door", (0, 0.5), (1, 0.5))], rules=EventRules(crowd_threshold=9))
     again = SceneConfig.from_dict(scene.to_dict())
     assert again.to_dict() == scene.to_dict()
+
+
+# --- uncertainty: weak or unstable detections are "unknown", never stated as fact ---
+
+from app.vision.types import resolve_label  # noqa: E402
+
+
+def weak(track_id: int, x: float, y: float, t: float, cls: str, conf: float) -> TrackedObject:
+    return TrackedObject(track_id, cls, conf, (x - 5, y - 20, x + 5, y), frame_number=int(t * 10), timestamp=t)
+
+
+def test_resolve_label() -> None:
+    assert resolve_label({"person": 10}, 0.9, confirm_confidence=0.5) == ("person", "person", False)
+    assert resolve_label({"person": 10}, 0.41, confirm_confidence=0.5) == ("unknown", "person", True)  # weak
+    assert resolve_label({"person": 5, "dog": 5}, 0.9, confirm_confidence=0.5) == ("unknown", "person", True)  # unstable class
+    assert resolve_label({}, 0.0, confirm_confidence=0.5)[0] == "unknown"
+
+
+def test_low_confidence_person_is_reported_as_unidentified_object() -> None:
+    engine = EventEngine(SceneConfig(rules=EventRules(confirm_confidence=0.5, loiter_seconds=2, crowd_threshold=1)))
+    frames = [(t / 2, [weak(1, 50, 50, t / 2, "person", 0.41)]) for t in range(0, 12)]  # 6 s at 0.41
+    events = run(engine, frames)
+    appeared = next(e for e in events if e.event_type == "object_appeared")
+    assert appeared.object_class == "unknown"
+    assert appeared.description.startswith("unidentified object (possibly person, 0.41)")
+    assert appeared.metadata["requires_vlm"] is True and appeared.metadata["candidate_class"] == "person"
+    # person-only rules do not fire on a guess
+    assert not [e for e in events if e.event_type in ("loitering", "crowd_detected")]
+
+
+def test_confident_detection_keeps_its_class() -> None:
+    engine = EventEngine(SceneConfig(rules=EventRules(confirm_confidence=0.5)))
+    events = run(engine, [(t / 2, [weak(1, 50, 50, t / 2, "dog", 0.83)]) for t in range(4)])
+    assert events[0].object_class == "dog" and "uncertain" not in events[0].metadata
+
+
+@pytest.mark.skipif(not __import__("pathlib").Path("models/yolo26s.pt").exists(), reason="weights not downloaded")
+def test_detector_is_not_restricted_to_a_few_classes() -> None:
+    from pathlib import Path
+
+    from app.vision.detectors import build_detector
+
+    det = build_detector("yolo", weights_dir=Path("models"), device="cpu")
+    assert det.class_filter is None and len(det.class_names) == 80
+    assert {"dog", "cat", "bird", "horse", "bottle", "laptop"} <= set(det.class_names.values())
+    only = build_detector("yolo", weights_dir=Path("models"), device="cpu", classes=["person", "dog"])
+    assert only.info()["class_filter"] == ["person", "dog"]
+    with pytest.raises(ValueError):
+        build_detector("yolo", weights_dir=Path("models"), device="cpu", classes=["rabbit"])  # not a COCO class

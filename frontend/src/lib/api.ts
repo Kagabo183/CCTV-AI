@@ -9,6 +9,8 @@ import type {
   VideoSource,
   VisionRun,
   BoxTrack,
+  DescribeResult,
+  Track,
 } from "./types";
 
 export class ApiError extends Error {
@@ -52,8 +54,9 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
 
   sources: () => request<VideoSource[]>("/video-sources"),
-  addSource: (body: { name: string; location?: string; uri: string; kind?: string }) =>
+  addSource: (body: { uri: string; name?: string; location?: string; kind?: string; clip_seconds?: number }) =>
     request<VideoSource>("/video-sources", { method: "POST", body: json(body) }),
+  importSource: (id: string) => request<VideoSource>(`/video-sources/${id}/import`, { method: "POST" }),
   uploadSource: (file: File, name: string, location: string, onProgress: (fraction: number) => void) =>
     new Promise<VideoSource>((resolve, reject) => {
       // XHR (not fetch) so we can report upload progress.
@@ -83,7 +86,12 @@ export const api = {
   visionRuns: (sourceId: string) => request<VisionRun[]>(`/video-sources/${sourceId}/vision/runs`),
   runVision: (sourceId: string, detector: string, tracker: string) =>
     request<VisionRun>(`/video-sources/${sourceId}/vision/run`, { method: "POST", body: json({ detector, tracker }) }),
+  cancelRun: (sourceId: string, runId: string) =>
+    request<VisionRun>(`/video-sources/${sourceId}/vision/runs/${runId}/cancel`, { method: "POST" }),
   boxes: (sourceId: string, runId: string) => request<BoxTrack>(`/video-sources/${sourceId}/vision/runs/${runId}/boxes`),
+  tracks: (sourceId: string, runId: string) => request<Track[]>(`/video-sources/${sourceId}/vision/runs/${runId}/tracks`),
+  describeTrack: (sourceId: string, runId: string, trackId: number) =>
+    request<DescribeResult>(`/video-sources/${sourceId}/vision/runs/${runId}/tracks/${trackId}/describe`, { method: "POST" }),
   events: (sourceId: string, runId: string) =>
     request<VideoEvent[]>(`/video-sources/${sourceId}/events?limit=500&evidence_level=rule&vision_run_id=${runId}`),
 

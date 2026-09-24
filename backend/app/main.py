@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -23,11 +24,26 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.assert_production_safe()
-    VideoGateway(settings).purge_workdir()
+    gateway = VideoGateway(settings)
+    gateway.purge_workdir()
+    from app.services.vision import recover_after_restart
+
+    recovered = await recover_after_restart(gateway)
+    if any(recovered.values()):
+        logger.info("Recovered jobs after restart: %s", recovered)
     logger.info("Video analyzer: %s", settings.resolved_analyzer_provider)
     if settings.resolved_analyzer_provider == "mock":
         logger.warning("GEMINI_API_KEY not set: using the MOCK video analyzer. Answers are placeholders.")
+    warmup = None
+    if settings.stt_provider == "mms":
+        # Load the local speech model in the background so the first spoken question is not slow (~20 s load).
+        from app.voice.factory import get_stt
+
+        stt = get_stt()
+        warmup = asyncio.create_task(asyncio.to_thread(stt._load))  # type: ignore[attr-defined]
     yield
+    if warmup is not None and not warmup.done():
+        warmup.cancel()
     await close_cache()
     await dispose_engine()
 

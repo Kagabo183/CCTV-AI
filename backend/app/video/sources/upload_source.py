@@ -23,13 +23,24 @@ _CHUNK = 1024 * 1024
 _MIME_EXT = {"video/mp4": ".mp4", "video/quicktime": ".mov", "video/webm": ".webm", "video/x-msvideo": ".avi", "video/mpeg": ".mpg"}
 
 
-class UploadedVideoSource(LocalFileVideoSource):
-    """Same mechanics as a local file, but the file is owned by the platform."""
+class StoredVideoSource(LocalFileVideoSource):
+    """A platform-owned copy of a video: an upload, or an imported link.
 
-    kind = SourceKind.UPLOAD
+    Imported links (YouTube, web pages, HLS, camera clips) keep their original
+    kind/URL on the record; the playable MP4 lives under UPLOAD_DIR.
+    """
+
+    def __init__(self, source_id: uuid.UUID | None, stored_path: str, metadata: dict[str, Any] | None, *, root: Path, kind: SourceKind) -> None:
+        super().__init__(source_id, stored_path, metadata, root=root)
+        self.kind = kind
 
     def delete_file(self) -> None:
         self._path().unlink(missing_ok=True)
+
+
+class UploadedVideoSource(StoredVideoSource):
+    def __init__(self, source_id: uuid.UUID | None, uri: str, metadata: dict[str, Any] | None, *, root: Path) -> None:
+        super().__init__(source_id, uri, metadata, root=root, kind=SourceKind.UPLOAD)
 
 
 async def store_upload(upload: UploadFile, root: Path, owner_id: uuid.UUID, max_bytes: int) -> tuple[str, dict[str, Any]]:

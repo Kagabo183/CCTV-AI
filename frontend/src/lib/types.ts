@@ -13,10 +13,11 @@ export type VideoSource = {
   location: string | null;
   kind: string;
   uri: string;
-  status: "pending" | "ready" | "error";
+  status: "pending" | "importing" | "ready" | "error";
   status_message: string | null;
   metadata: Record<string, unknown>;
   playback: Playback | null;
+  import_progress?: number | null;
   created_at: string;
 };
 
@@ -52,6 +53,9 @@ export type Message = {
     tools_used?: string[];
     escalated?: boolean;
     evidence_levels?: EvidenceLevel[];
+    understanding_providers?: string[];
+    agent_llm?: "gemini" | "local";
+    agent_model?: string;
   };
   created_at: string;
 };
@@ -93,7 +97,9 @@ export type VisionRun = {
   id: string | null;
   available: boolean;
   unsupported_reason?: string | null;
-  status: "disabled" | "unsupported" | "not_started" | "queued" | "running" | "completed" | "failed";
+  queue_position?: number | null; // 1 = next to run
+  waiting_for?: string | null; // the run currently using the GPU
+  status: "disabled" | "unsupported" | "not_started" | "queued" | "running" | "completed" | "failed" | "cancelled";
   progress: number;
   detector: string | null;
   weights: string | null;
@@ -117,15 +123,18 @@ export type VisionRun = {
     frames_processed?: number;
   };
   quality: {
-    tracks?: { total?: number; short_lived?: number; mean_seconds?: number; by_class?: Record<string, number> };
+    tracks?: { total?: number; short_lived?: number; mean_seconds?: number; uncertain?: number; by_class?: Record<string, number> };
     detections?: Record<string, { count: number; mean_confidence: number }>;
   };
+  max_simultaneous?: Record<string, { count: number; at: number }>;
+  settings?: { weights?: string; image_size?: number; tiling?: { tile_size: number; overlap: number } | null; confidence?: number; confirm_confidence?: number };
 };
 
 /** Per-frame tracked boxes: o = [track_id, class, confidence, x1, y1, x2, y2] in source pixels. */
 export type BoxTrack = {
   resolution: [number, number];
   sample_fps: number;
+  confirm_confidence?: number;
   frames: { t: number; o: [number, string, number, number, number, number, number][] }[];
 };
 
@@ -141,4 +150,29 @@ export type VideoEvent = {
   end_time: number | null;
   confidence: number | null;
   detector: string;
+};
+
+export type Track = {
+  track_id: number;
+  object_class: string; // "unknown" when the detector was not confident
+  candidate_class: string | null;
+  uncertain: boolean;
+  mean_confidence: number;
+  max_confidence: number;
+  first_seen: number;
+  last_seen: number;
+  frames: number;
+  class_votes: Record<string, number>;
+  last_bbox: number[];
+};
+
+export type DescribeResult = {
+  track_id: number;
+  description: string;
+  observations: string[];
+  confidence: number | null;
+  insufficient_evidence: boolean;
+  provider: string;
+  model: string | null;
+  window: [number, number];
 };

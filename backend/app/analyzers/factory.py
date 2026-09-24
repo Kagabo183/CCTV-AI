@@ -22,6 +22,18 @@ from app.core.errors import ProviderUnavailable
 def get_video_analyzer() -> VideoAnalyzer:
     settings = get_settings()
     provider = settings.resolved_analyzer_provider
+    if provider == "agent" and settings.agent_llm == "local":
+        from app.agent.analyzer import AgentVideoAnalyzer
+
+        model = settings.agent_local_model or settings.local_vlm_model
+        if not model:
+            raise ProviderUnavailable("AGENT_LLM=local needs AGENT_LOCAL_MODEL or LOCAL_VLM_MODEL", code="analyzer_not_configured")
+        return AgentVideoAnalyzer(
+            video_analyzer=None,
+            model=model,
+            max_steps=settings.agent_max_steps,
+            local_llm={"base_url": settings.agent_local_url or settings.local_vlm_url, "model": model, "api_key": None, "reasoning_effort": settings.agent_local_reasoning},
+        )
     if provider in ("gemini", "agent"):
         if not settings.gemini_configured:
             raise ProviderUnavailable(f"{provider} is selected but GEMINI_API_KEY is not set", code="analyzer_not_configured")

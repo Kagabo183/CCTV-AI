@@ -27,8 +27,26 @@ from app.video.gateway import VideoGateway
 
 logger = logging.getLogger(__name__)
 
-_gpu_lock = asyncio.Lock()
+_gpu_lock = asyncio.Lock()  # one run at a time on the GPU; asyncio.Lock wakes waiters in FIFO order
 _progress: dict[uuid.UUID, float] = {}
+_cancelled: set[uuid.UUID] = set()
+
+
+class RunCancelled(Exception):
+    pass
+
+
+def request_cancel(run_id: uuid.UUID) -> None:
+    """Queued runs are skipped; a running run stops at its next progress check (every ~25 frames)."""
+    _cancelled.add(run_id)
+
+
+def sample_fps_for(settings: Settings, duration: float | None) -> float:
+    """Frames per second to analyse: the configured rate, lowered for long videos (VISION_MAX_FRAMES)."""
+    if not duration:
+        return settings.vision_sample_fps
+    seconds = min(duration, settings.video_import_max_seconds)
+    return max(1.0, min(settings.vision_sample_fps, int(settings.vision_max_frames / max(seconds, 1.0) * 100) / 100))
 _tasks: set[asyncio.Task[None]] = set()
 
 
@@ -63,16 +81,32 @@ def _free_gpu_memory() -> None:
         pass
 
 
-def _detector(name: str, weights: str | None, device: str, confidence: float, weights_dir: str):  # type: ignore[no-untyped-def]
+def detector_options(settings: Settings) -> dict[str, object]:
+    """Resolution / tiling / confidence from settings, as build_detector keyword arguments."""
+    from app.vision.detectors import TilingConfig
+
+    tiling = None
+    if settings.vision_tiling == "on":
+        tiling = TilingConfig(
+            tile_size=settings.vision_tile_size,
+            overlap=settings.vision_tile_overlap,
+            tile_image_size=settings.vision_tile_image_size,
+            full_frame=settings.vision_tile_full_frame,
+            classes=tuple(settings.vision_tile_classes),
+        )
+    return {"confidence": settings.vision_confidence, "image_size": settings.vision_image_size, "tiling": tiling}
+
+
+def _detector(name: str, weights: str | None, device: str, weights_dir: str, classes: tuple[str, ...] = (), **options: object):  # type: ignore[no-untyped-def]
     from pathlib import Path
 
     from app.vision.detectors import build_detector
 
-    key = (name, weights, device, confidence, weights_dir)
+    key = (name, weights, device, weights_dir, classes, tuple(sorted(options.items())))
     if _resident.get("key") != key:
         _resident.clear()
         _free_gpu_memory()
-        detector = build_detector(name, weights, weights_dir=Path(weights_dir), device=device, confidence=confidence)
+        detector = build_detector(name, weights, weights_dir=Path(weights_dir), device=device, classes=list(classes) or None, **options)
         detector.warmup()
         _resident.update(key=key, detector=detector)
     return _resident["detector"]
@@ -84,8 +118,9 @@ def run_progress(run: VisionRun) -> float:
     return _progress.get(run.id, 0.0)
 
 
-DEFAULT_WEIGHTS = {"yolo": "yolo26s.pt", "rtdetr": "rtdetr-l.pt"}
-DETECTORS = ("yolo", "rtdetr")
+from app.vision.detectors import DEFAULT_WEIGHTS  # noqa: E402
+
+DETECTORS = tuple(DEFAULT_WEIGHTS)
 TRACKERS = ("bytetrack", "botsort")
 
 
@@ -96,16 +131,10 @@ def weights_for(detector: str, settings: Settings) -> str:
     return DEFAULT_WEIGHTS[detector]
 
 
-YOUTUBE_UNSUPPORTED = (
-    "YouTube videos can't be analysed locally: the server never downloads them (only Gemini reads YouTube links). "
-    "To compare detectors on this footage, upload the video file or use a direct link to an MP4."
-)
-
-
 def local_analysis_blocker(source: VideoSourceRecord) -> str | None:
     """Why local vision cannot run on this source, or None if it can."""
-    if source.source_metadata.get("delivery") == "youtube":
-        return YOUTUBE_UNSUPPORTED
+    if source.status == "importing":
+        return "The video is still being imported."
     return None
 
 
@@ -139,6 +168,20 @@ class VisionService:
             )
         ).scalar_one_or_none()
 
+    async def queue_info(self, run: VisionRun) -> tuple[int | None, str | None]:
+        """(position, what it is waiting for) for a queued run: position 1 = next to start."""
+        if run.status != "queued":
+            return None, None
+        active = list((await self.db.execute(select(VisionRun).where(VisionRun.status.in_(("queued", "running"))).order_by(VisionRun.created_at))).scalars().all())
+        running = next((r for r in active if r.status == "running"), None)
+        ahead = [r for r in active if r.status == "queued" and r.created_at < run.created_at]
+        waiting = None
+        if running is not None:
+            source = await self.db.get(VideoSourceRecord, running.video_source_id)
+            name = source.name if source else "another video"
+            waiting = f"{name} ({running.detector}+{running.tracker}) {round(run_progress(running) * 100)}%"
+        return len(ahead) + 1, waiting
+
     async def start(self, source: VideoSourceRecord, detector: str | None = None, tracker: str | None = None) -> VisionRun:
         s = self.settings
         detector = detector or s.vision_detector
@@ -150,7 +193,7 @@ class VisionService:
         # A new attempt replaces earlier failed attempts of the same combination.
         await self.db.execute(
             delete(VisionRun).where(
-                VisionRun.video_source_id == source.id, VisionRun.detector == detector, VisionRun.tracker == tracker, VisionRun.status == "failed"
+                VisionRun.video_source_id == source.id, VisionRun.detector == detector, VisionRun.tracker == tracker, VisionRun.status.in_(("failed", "cancelled"))
             )
         )
         run = VisionRun(
@@ -182,7 +225,12 @@ async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
     settings = get_settings()
     async with _gpu_lock, get_sessionmaker()() as db:
         run = await db.get(VisionRun, run_id)
-        if run is None:
+        if run is None or run.status != "queued":
+            return
+        if run_id in _cancelled:
+            _cancelled.discard(run_id)
+            run.status, run.error, run.completed_at = "cancelled", "Cancelled before it started", datetime.now(UTC)
+            await db.commit()
             return
         source = await db.get(VideoSourceRecord, run.video_source_id)
         if source is None:
@@ -195,22 +243,51 @@ async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
             from app.vision.pipeline import VisionPipeline
             from app.vision.trackers import build_tracker
 
-            media = await gateway.acquire(gateway.build(source.kind, source.uri, source_id=source.id, metadata=source.source_metadata))
-            if media.local_path is None:
-                raise ValueError("Local analysis needs the video file. YouTube links are analysed by Gemini only.")
+            from app.video import streaming
+
+            target: Path | str | None
+            if streaming.is_streamed(source.source_metadata):
+                # Online video: read frames straight from the stream, nothing is downloaded.
+                # 720p is plenty for detection (tiling handles small objects) and decodes ~2x faster than 1080p.
+                info = await asyncio.to_thread(streaming.resolve, source.uri, min(720, settings.video_import_max_height))
+                target = info.url
+                fresh = {k: v for k, v in info.as_metadata().items() if k not in source.source_metadata}
+                if fresh:
+                    source.source_metadata = {**source.source_metadata, **fresh}
+                    await db.commit()
+            else:
+                media = await gateway.acquire(gateway.build(source.kind, source.uri, source_id=source.id, metadata=source.source_metadata))
+                target = media.local_path
+            if target is None:
+                raise ValueError("Local analysis needs the video file or stream.")
             device = resolve_device(settings.vision_device)
             detector = await asyncio.to_thread(
-                _detector, run.detector, run.weights, device, settings.vision_confidence, str(settings.vision_weights_dir)
+                _detector, run.detector, run.weights, device, str(settings.vision_weights_dir), tuple(settings.vision_classes), **detector_options(settings)
             )
+            scene = SceneConfig.from_dict(source.scene_config)
+            if "confirm_confidence" not in (source.scene_config or {}).get("rules", {}):
+                scene.rules.confirm_confidence = settings.vision_confirm_confidence
+            fps = sample_fps_for(settings, source.source_metadata.get("duration_seconds"))
             pipeline = VisionPipeline(
                 detector,
-                build_tracker(run.tracker, processing_fps=settings.vision_sample_fps),
-                SceneConfig.from_dict(source.scene_config),
-                sample_fps=settings.vision_sample_fps,
+                build_tracker(run.tracker, processing_fps=fps),
+                scene,
+                sample_fps=fps,
             )
-            result = await asyncio.to_thread(pipeline.run, media.local_path, progress=lambda p: _progress.__setitem__(run_id, p))
+            def on_progress(p: float) -> None:
+                if run_id in _cancelled:
+                    raise RunCancelled
+                _progress[run_id] = p
+
+            result = await asyncio.to_thread(pipeline.run, target, progress=on_progress, max_seconds=settings.video_import_max_seconds)
             await _persist(db, run, source, result)
             logger.info("Vision run %s: %s tracks, %s events", run_id, len(result.tracks), len(result.events))
+        except RunCancelled:
+            await db.rollback()
+            run = await db.get(VisionRun, run_id)
+            if run is not None:
+                run.status, run.error, run.completed_at = "cancelled", "Cancelled by user", datetime.now(UTC)
+                await db.commit()
         except Exception as exc:
             logger.exception("Vision run %s failed", run_id)
             await db.rollback()
@@ -222,6 +299,7 @@ async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
                 await db.commit()
         finally:
             _progress.pop(run_id, None)
+            _cancelled.discard(run_id)
             if media is not None:
                 await media.release()
 
@@ -233,19 +311,28 @@ async def _persist(db: AsyncSession, run: VisionRun, source: VideoSourceRecord, 
         start = source.recorded_start_at if source.recorded_start_at.tzinfo else source.recorded_start_at.replace(tzinfo=UTC)
         return start + timedelta(seconds=seconds)
 
+    confirm = result.stats.get("confirm_confidence", 0.5)
     for t in result.tracks.values():
+        label, candidate, uncertain = t.resolved(confirm, 0.6)
         db.add(
             ObjectTrack(
                 vision_run_id=run.id,
                 video_source_id=source.id,
                 track_id=t.track_id,
-                object_class=t.object_class,
+                object_class=label,
                 first_seen=round(t.first_seen, 2),
                 last_seen=round(t.last_seen, 2),
                 frames=t.frames,
                 mean_confidence=round(t.mean_confidence, 3),
                 max_confidence=round(t.max_confidence, 3),
-                track_metadata={"class_votes": dict(t.classes), "first_bbox": [round(v, 1) for v in t.first_bbox], "last_bbox": [round(v, 1) for v in t.last_bbox]},
+                track_metadata={
+                    "class_votes": dict(t.classes),
+                    "candidate_class": candidate,
+                    "uncertain": uncertain,
+                    "requires_vlm": uncertain,
+                    "first_bbox": [round(v, 1) for v in t.first_bbox],
+                    "last_bbox": [round(v, 1) for v in t.last_bbox],
+                },
             )
         )
     for snap in result.snapshots:
@@ -272,7 +359,7 @@ async def _persist(db: AsyncSession, run: VisionRun, source: VideoSourceRecord, 
         )
     artifact = artifact_path(run.id)
     artifact.parent.mkdir(parents=True, exist_ok=True)
-    artifact.write_text(json.dumps({"resolution": result.stats.get("resolution"), "sample_fps": result.stats.get("sample_fps"), "frames": result.frames}, separators=(",", ":")))
+    artifact.write_text(json.dumps({"resolution": result.stats.get("resolution"), "sample_fps": result.stats.get("sample_fps"), "confirm_confidence": confirm, "frames": result.frames}, separators=(",", ":")))
 
     run.status = "completed"
     run.stats = result.stats
@@ -298,3 +385,35 @@ async def _persist(db: AsyncSession, run: VisionRun, source: VideoSourceRecord, 
         for old_id in old_ids:
             artifact_path(old_id).unlink(missing_ok=True)
     await db.commit()
+
+
+async def recover_after_restart(gateway: VideoGateway) -> dict[str, int]:
+    """Jobs live in this process: after a restart the database still says 'running'.
+
+    * queued vision runs      -> queued again (they never started)
+    * running vision runs     -> queued again from the start (their partial results were never saved)
+    * preparing sessions      -> expired, re-prepared on the next open
+    * importing sources       -> error, with a Try again button in the UI
+    """
+    from app.models import VideoSession
+
+    counts = {"requeued": 0, "interrupted": 0, "sessions": 0, "imports": 0}
+    async with get_sessionmaker()() as db:
+        for run in (await db.execute(select(VisionRun).where(VisionRun.status == "running"))).scalars().all():
+            run.status, run.error = "queued", None
+            counts["interrupted"] += 1
+        for session in (await db.execute(select(VideoSession).where(VideoSession.status == "preparing"))).scalars().all():
+            session.status, session.status_message = "expired", "Interrupted by a server restart"
+            counts["sessions"] += 1
+        for source in (await db.execute(select(VideoSourceRecord).where(VideoSourceRecord.status == "importing"))).scalars().all():
+            source.status, source.status_message = "error", "Import interrupted by a server restart. Press Try again."
+            counts["imports"] += 1
+        queued = list((await db.execute(select(VisionRun).where(VisionRun.status == "queued").order_by(VisionRun.created_at))).scalars().all())
+        await db.commit()
+    if vision_available():
+        for run in queued:
+            task = asyncio.create_task(_execute(run.id, gateway))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
+            counts["requeued"] += 1
+    return counts

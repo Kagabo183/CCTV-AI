@@ -3,3 +3,5 @@
 ultralytics>=8.4
 lap>=0.5.12
 psutil>=5.9
+transformers>=4.44  # NLLB-200 local translation (Kinyarwanda <-> English)
+sentencepiece>=0.2

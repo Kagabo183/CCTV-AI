@@ -73,7 +73,7 @@ async def test_local_answer_without_escalation(engine: object) -> None:
     result = await agent.analyze(PreparedVideo(analyzer="agent", ref={"file_uri": "f"}), query(user_id, source_id, "Ni abantu bangahe?"))
 
     assert result.answer == "Habonetse abantu babiri." and result.analyzer == "agent"
-    assert result.trace == {"tools_used": ["count_objects"], "escalated": False, "steps": 2, "evidence_levels": ["tracking"]}
+    assert result.trace == {"tools_used": ["count_objects"], "escalated": False, "steps": 2, "evidence_levels": ["tracking"], "agent_llm": "gemini", "agent_model": "fake-model"}
     assert video.queries == []  # no video tokens spent
     assert result.usage.input_tokens == 200
     tool_reply = llm.requests[1][-1]  # the tool result was fed back to the model
@@ -123,3 +123,106 @@ async def test_last_step_forces_final_answer(engine: object) -> None:
     await agent.analyze(PreparedVideo(analyzer="agent", ref={}), query(user_id, source_id, "?"))
     assert configs[0].tool_config.function_calling_config.allowed_function_names is None
     assert configs[1].tool_config.function_calling_config.allowed_function_names == ["final_answer"]
+
+
+async def test_local_llm_agent_over_openai_compatible_api(engine: object, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """AGENT_LLM=local: a Qwen-style model on Ollama drives the same tools through /chat/completions."""
+    import json
+
+    import httpx
+
+    user_id, source_id = await seed()
+    sent: list[dict] = []
+    replies = [
+        {"choices": [{"message": {"content": "", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "count_objects", "arguments": json.dumps({"object_class": "person"})}}]}}], "usage": {"prompt_tokens": 50, "completion_tokens": 5}},
+        {"choices": [{"message": {"content": "", "tool_calls": [{"id": "c2", "type": "function", "function": {"name": "final_answer", "arguments": json.dumps({"answer": "Habonetse abantu babiri.", "confidence": 0.8, "insufficient_evidence": False})}}]}}], "usage": {"prompt_tokens": 80, "completion_tokens": 9}},
+    ]
+
+    async def fake_post(self, url, json=None, headers=None, **kw):  # type: ignore[no-untyped-def]
+        sent.append(__import__("copy").deepcopy(json))  # snapshot: the chat keeps appending to its message list
+        return httpx.Response(200, json=replies.pop(0), request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    agent = AgentVideoAnalyzer(video_analyzer=None, model="qwen3-vl:8b", local_llm={"base_url": "http://127.0.0.1:11434/v1", "model": "qwen3-vl:8b", "api_key": None})
+    prepared = await agent.prepare(__import__("app.video.sources.base", fromlist=["MediaHandle"]).MediaHandle(mime_type="video/mp4"))
+    assert prepared.ref == {"local": True}  # nothing uploaded to Gemini
+
+    result = await agent.analyze(prepared, query(user_id, source_id, "Ni abantu bangahe?"))
+    assert result.answer == "Habonetse abantu babiri." and result.trace["agent_llm"] == "local"
+    assert result.usage.input_tokens == 130
+    assert sent[0]["tool_choice"] == "required" and sent[0]["messages"][0]["role"] == "system"
+    tool_msg = sent[1]["messages"][-1]
+    assert tool_msg["role"] == "tool" and tool_msg["tool_call_id"] == "c1" and '"person": 2' in tool_msg["content"]
+
+
+async def test_local_llm_plain_text_answer_is_accepted_after_a_nudge(engine: object, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import httpx
+
+    user_id, source_id = await seed()
+    replies = [{"choices": [{"message": {"content": "Hari abantu babiri."}}]}] * 2
+
+    async def fake_post(self, url, json=None, headers=None, **kw):  # type: ignore[no-untyped-def]
+        return httpx.Response(200, json=replies[0], request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    agent = AgentVideoAnalyzer(video_analyzer=None, model="m", local_llm={"base_url": "http://x/v1", "model": "m", "api_key": None})
+    result = await agent.analyze(PreparedVideo(analyzer="agent", ref={"local": True}), query(user_id, source_id, "?"))
+    assert result.answer == "Hari abantu babiri." and result.trace["unstructured_answer"] is True and result.confidence == 0.3
+
+
+async def test_local_agent_works_in_english_and_translates(engine: object, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """AGENT_LLM=local + translator: Kinyarwanda question -> English for the model -> Kinyarwanda answer."""
+    import json
+
+    import httpx
+
+    from app.agent import analyzer as agent_module
+
+    class FakeTranslator:
+        name = "fake_nllb"
+        calls: list[tuple[str, str, str]] = []
+
+        async def translate(self, text: str, source: str, target: str) -> str:
+            self.calls.append((text, source, target))
+            return {"Ni abantu bangahe?": "How many people?", "There are 2 people.": "Hari abantu 2."}.get(text, text)
+
+    monkeypatch.setattr(agent_module.AgentVideoAnalyzer, "_translator", staticmethod(lambda: FakeTranslator()))
+    user_id, source_id = await seed()
+    seen: list[dict] = []
+    replies = [{"choices": [{"message": {"content": "", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "final_answer", "arguments": json.dumps({"answer": "There are 2 people.", "confidence": 0.8, "insufficient_evidence": False})}}]}}]}]
+
+    async def fake_post(self, url, json=None, headers=None, **kw):  # type: ignore[no-untyped-def]
+        seen.append(__import__("copy").deepcopy(json))
+        return httpx.Response(200, json=replies.pop(0), request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    agent = AgentVideoAnalyzer(video_analyzer=None, model="qwen2.5:7b", local_llm={"base_url": "http://x/v1", "model": "qwen2.5:7b", "api_key": None})
+    result = await agent.analyze(PreparedVideo(analyzer="agent", ref={"local": True}), query(user_id, source_id, "Ni abantu bangahe?"))
+
+    assert seen[0]["messages"][-1]["content"].startswith("How many people?")  # the model saw English
+    assert "Write `answer` in English" in seen[0]["messages"][0]["content"]
+    assert result.answer == "Hari abantu 2." and result.language == "rw"
+    assert result.trace["answer_en"] == "There are 2 people." and result.trace["translated_by"] == "fake_nllb"
+
+
+async def test_local_stt_short_recording_is_empty(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Near-silent/too-short recordings give an empty transcript (the route then asks to try again)."""
+    import numpy as np
+
+    from app.voice import local_stt
+
+    monkeypatch.setattr(local_stt, "decode_audio", lambda audio: np.zeros(1000, dtype=np.float32))
+    stt = local_stt.MMSSpeechToText()
+    result = await stt.transcribe(b"x", "audio/webm", "rw")
+    assert result.text == "" and result.provider == "mms" and stt._model is None  # model not even loaded
+
+
+def test_inline_final_answer_text_is_recovered() -> None:
+    from app.agent.llm import inline_calls
+
+    text = 'Based on the video...\n\nfinal_answer({"answer":"9 elephants at once.","confidence":0.8,"evidence":[]})'
+    (call,) = inline_calls(text)
+    assert call.name == "final_answer" and call.args["answer"] == "9 elephants at once."
+    (call,) = inline_calls('{"name": "final_answer", "arguments": {"answer": "yes"}}')
+    assert call.args == {"answer": "yes"}
+    assert inline_calls("There are 9 elephants.") == []

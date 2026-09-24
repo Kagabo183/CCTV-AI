@@ -4,6 +4,10 @@
                                         \\--escalation--> GeminiVideoAnalyzer on a clip
              -> final_answer (answer + timestamps + evidence with levels)
 
+Escalation goes through a VideoUnderstandingProvider (Gemini, a local VLM, or
+Together AI) so open-ended "what is that?" questions are answered by a model
+that is not limited to the detector's class list.
+
 It implements the VideoAnalyzer interface, so the orchestrator, API and UI are
 unchanged. Local tools cost no video tokens; the video is only sent to Gemini
 when the agent decides local evidence cannot answer (analyze_video_clip).
@@ -27,10 +31,14 @@ from app.analyzers.base import (
     Usage,
     VideoAnalyzer,
 )
-from app.analyzers.gemini import LANGUAGE_NAMES, GeminiVideoAnalyzer, _provider_error, _with_retries
+from app.agent.llm import AgentChat, GeminiAgentChat, OpenAIAgentChat
+from app.analyzers.gemini import LANGUAGE_NAMES, GeminiVideoAnalyzer
 from app.core.errors import AppError, ProviderUnavailable
 from app.db.session import get_sessionmaker
-from app.video.sources.base import MediaHandle, TimeWindow
+from app.understanding.base import UnderstandingRequest, VideoRef, VideoUnderstandingProvider
+from app.understanding.factory import get_understanding_provider
+from app.understanding.providers import GeminiVideoProvider
+from app.video.sources.base import MediaHandle
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +62,11 @@ How to work:
 3. If local analysis is unavailable (processing, failed, or a YouTube link), use analyze_video_clip.
 4. Clock times ("saa munani" = 14:00) only work if the camera has a known recording start. Otherwise say the video has no clock time.
 5. Counting caveat: one person hidden and seen again can get a new track id. For "how many are there", prefer the number visible at the same time. Say "about" when unsure.
+6. The detector is CLOSED-SET: it only knows a fixed list of classes (COCO: 80, Objects365: 365) and confidently mislabels things outside it (a cartoon rabbit came out as "person"). Tracks the detector was not sure about are labelled "unknown" with a candidate class and a confidence (see list_uncertain_objects).
+   - Never state an unknown track's candidate as fact: say "an unidentified object, possibly a person (confidence 0.41)".
+   - For "what is that object/animal?", "what is it doing?", "what changed?", "describe everything", unknown objects, or anything a class label cannot express: call analyze_video_clip on that time window.
+
+Numbers: when a tool result has a "summary", use its numbers exactly. Never invent or estimate a number that no tool returned.
 
 Honesty rules:
 - NEVER claim intent, behaviour or wrongdoing (stealing, suspicious, fighting, breaking in) from detection or tracking. Only report it if analyze_video_clip explicitly observed it, and present it as what the video analysis saw.
@@ -68,76 +81,130 @@ class AgentVideoAnalyzer(VideoAnalyzer):
     name = "agent"
     capabilities = AnalyzerCapabilities(accepts_remote_uri=True, continuous_events=True)
 
-    def __init__(self, *, video_analyzer: GeminiVideoAnalyzer, model: str, max_steps: int = 6) -> None:
+    def __init__(
+        self,
+        *,
+        video_analyzer: GeminiVideoAnalyzer | None,
+        model: str,
+        max_steps: int = 6,
+        understanding: VideoUnderstandingProvider | None = None,
+        local_llm: dict[str, Any] | None = None,
+    ) -> None:
+        """video_analyzer=None + local_llm={base_url, model, api_key, reasoning_effort} runs fully
+        locally: no Gemini upload, a local model drives the tools, a local VLM answers visual questions."""
         self.video = video_analyzer
         self.model = model
         self.max_steps = max_steps
-        self._client = video_analyzer._client
+        self._client = video_analyzer._client if video_analyzer is not None else None
+        self._understanding = understanding
+        self.local_llm = local_llm
+
+    def _chat(self, system: str, query: AnalysisQuery, user_text: str) -> AgentChat:
+        if self.local_llm:
+            return OpenAIAgentChat(system=system, history=query.history, user_text=user_text, tool_schemas=TOOL_SCHEMAS, **self.local_llm)
+        return GeminiAgentChat(self._client, self.model, system, query.history, user_text, TOOL_SCHEMAS)
+
+    @property
+    def understanding(self) -> VideoUnderstandingProvider:
+        """Configured VLM provider(s); Gemini on the session video if none is configured."""
+        if self._understanding is None:
+            try:
+                self._understanding = get_understanding_provider()
+            except AppError:
+                if self.video is None:
+                    raise
+                self._understanding = GeminiVideoProvider(self.video)
+        return self._understanding
 
     async def prepare(self, media: MediaHandle) -> PreparedVideo:
+        if self.video is None:  # fully local: frame-based VLMs read the stored file directly
+            return PreparedVideo(analyzer=self.name, ref={"local": True}, media_metadata=dict(media.metadata))
         # Uploading to the Files API is storage, not inference: it makes escalation
         # fast when needed. No frames are analysed unless the agent escalates.
         prepared = await self.video.prepare(media)
         return prepared.model_copy(update={"analyzer": self.name})
 
     async def discard(self, prepared: PreparedVideo) -> None:
-        await self.video.discard(prepared)
+        if self.video is not None:
+            await self.video.discard(prepared)
 
     async def analyze(self, prepared: PreparedVideo, query: AnalysisQuery) -> AnalysisResult:
-        from google.genai import errors, types
-
         if query.user_id is None:
             raise ProviderUnavailable("Agent needs the user context", code="agent_misconfigured")
 
-        tools = [types.Tool(function_declarations=[types.FunctionDeclaration(name=t["name"], description=t["description"], parameters_json_schema=t["parameters"]) for t in TOOL_SCHEMAS])]
-        contents: list[types.Content] = []
-        for turn in query.history:
-            contents.append(types.Content(role="user" if turn.role == "user" else "model", parts=[types.Part(text=turn.content)]))
+        # Local models work in English; NLLB translates question/history in and the answer out.
+        translator = self._translator() if (self.local_llm and query.language != "en") else None
+        user_language = query.language
+        if translator is not None:
+            query = await self._to_english(query, translator)
+
         notes = ("\nConversation context: " + " | ".join(query.context_notes)) if query.context_notes else ""
-        contents.append(types.Content(role="user", parts=[types.Part(text=f"{query.question}{notes}")]))
-
-        usage = Usage(input_tokens=0, output_tokens=0)
-        trace: dict[str, Any] = {"tools_used": [], "escalated": False}
+        facts = await self._facts(query)
+        chat = self._chat(system_prompt(query), query, f"{query.question}{notes}{facts}")
+        trace: dict[str, Any] = {"tools_used": [], "escalated": False, "agent_llm": "local" if self.local_llm else "gemini", "agent_model": self.model}
         escalation_events: list[DetectedEvent] = []
+        extra_usage = Usage(input_tokens=0, output_tokens=0)  # escalation tokens
 
+        def usage() -> Usage:
+            return Usage(input_tokens=(chat.usage.input_tokens or 0) + (extra_usage.input_tokens or 0), output_tokens=(chat.usage.output_tokens or 0) + (extra_usage.output_tokens or 0))
+
+        nudged = False
         async with get_sessionmaker()() as db:
             memory = VisionMemory(db, query.user_id, query.source.source_id)
             for step in range(self.max_steps):
-                last = step == self.max_steps - 1
-                config = types.GenerateContentConfig(
-                    system_instruction=system_prompt(query),
-                    tools=tools,
-                    tool_config=types.ToolConfig(
-                        function_calling_config=types.FunctionCallingConfig(mode="ANY", allowed_function_names=["final_answer"] if last else None)
-                    ),
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                    temperature=0.2,
-                )
-                try:
-                    response = await _with_retries(lambda: self._client.aio.models.generate_content(model=self.model, contents=contents, config=config))
-                except errors.APIError as exc:
-                    raise _provider_error(exc) from exc
-                meta = response.usage_metadata
-                usage.input_tokens += getattr(meta, "prompt_token_count", 0) or 0
-                usage.output_tokens += getattr(meta, "candidates_token_count", 0) or 0
-
-                calls = response.function_calls or []
-                if not calls:
-                    raise ProviderUnavailable("The assistant did not produce an answer", code="agent_no_answer")
-                contents.append(response.candidates[0].content)  # keeps thought signatures for the next turn
-
-                responses = []
-                for call in calls:
-                    args = dict(call.args or {})
+                result = await chat.step(force_final=step == self.max_steps - 1)
+                if not result.calls:
+                    if result.text and nudged:  # some local models answer in plain text: accept it, marked as such
+                        trace["steps"], trace["unstructured_answer"] = step + 1, True
+                        return await self._finish({"answer": result.text, "confidence": 0.3, "insufficient_evidence": False}, query, usage(), trace, escalation_events, translator, user_language)
+                    if nudged:
+                        break
+                    chat.nudge("Use the tools, then call final_answer with your answer.")
+                    nudged = True
+                    continue
+                results = []
+                for call in result.calls:
                     if call.name == "final_answer":
                         trace["steps"] = step + 1
-                        return self._result(args, query, usage, trace, escalation_events)
+                        return await self._finish(call.args, query, usage(), trace, escalation_events, translator, user_language)
                     trace["tools_used"].append(call.name)
-                    result = await self._dispatch(call.name, args, memory, prepared, query, usage, trace, escalation_events)
-                    responses.append(types.Part.from_function_response(name=call.name, response={"result": result}))
-                # The Gemini API accepts only "user"/"model" roles: function results go in a user turn.
-                contents.append(types.Content(role="user", parts=responses))
+                    results.append((call, await self._dispatch(call.name, call.args, memory, prepared, query, extra_usage, trace, escalation_events)))
+                chat.add_results(results)
         raise ProviderUnavailable("The assistant could not finish the answer", code="agent_no_answer")
+
+    @staticmethod
+    async def _facts(query: AnalysisQuery) -> str:
+        """The detector's counts for this video, given up front: small models otherwise skip the
+        counting tool and ask the video AI, which only sees a few frames of a long video."""
+        try:
+            async with get_sessionmaker()() as db:
+                summary = (await VisionMemory(db, query.user_id, query.source.source_id).count_objects()).get("summary")  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001 - no local analysis yet: the agent works without it
+            return ""
+        return f"\nDetector facts for this video (use these numbers for counting and presence questions): {summary}" if summary else ""
+
+    @staticmethod
+    def _translator():  # type: ignore[no-untyped-def]
+        from app.language.translate import get_translator
+
+        return get_translator()
+
+    async def _to_english(self, query: AnalysisQuery, translator) -> AnalysisQuery:  # type: ignore[no-untyped-def]
+        src = query.language
+        question = await translator.translate(query.question, src, "en")
+        history = [
+            turn.model_copy(update={"content": await translator.translate(turn.content, src, "en")}) for turn in query.history
+        ]
+        # Only the English text: small models copy any other language they see into their answer.
+        return query.model_copy(update={"question": f"{question}\n(Answer in English.)", "history": history, "language": "en"})
+
+    async def _finish(self, args, query, usage, trace, events, translator, user_language):  # type: ignore[no-untyped-def]
+        result = self._result(args, query, usage, trace, events)
+        if translator is not None and result.answer:
+            trace["answer_en"] = result.answer
+            trace["translated_by"] = translator.name
+            result = result.model_copy(update={"answer": await translator.translate(result.answer, "en", user_language), "language": user_language, "trace": trace})
+        return result
 
     async def _dispatch(
         self,
@@ -152,7 +219,7 @@ class AgentVideoAnalyzer(VideoAnalyzer):
     ) -> Any:
         try:
             if name == "analyze_video_clip":
-                return await self._escalate(args, prepared, query, usage, trace, escalation_events)
+                return await self._escalate(args, memory, prepared, query, usage, trace, escalation_events)
             method = getattr(memory, name, None)
             if method is None or name.startswith("_"):
                 return {"error": f"Unknown tool {name}"}
@@ -162,33 +229,42 @@ class AgentVideoAnalyzer(VideoAnalyzer):
         except TypeError as exc:  # model passed unexpected arguments
             return {"error": f"Bad arguments for {name}: {exc}"}
 
-    async def _escalate(self, args: dict[str, Any], prepared: PreparedVideo, query: AnalysisQuery, usage: Usage, trace: dict[str, Any], events: list[DetectedEvent]) -> dict[str, Any]:
-        """Deep video understanding on the (optionally windowed) clip."""
+    async def _escalate(self, args: dict[str, Any], memory: VisionMemory, prepared: PreparedVideo, query: AnalysisQuery, usage: Usage, trace: dict[str, Any], events: list[DetectedEvent]) -> dict[str, Any]:
+        """Open-ended visual understanding of the (optionally windowed) clip by a vision-language model."""
         if args.get("camera_id") and str(args["camera_id"]) not in (str(query.source.source_id), query.source.location, query.source.name):
-            return {"error": "analyze_video_clip only works on the selected camera in this conversation."}
+            # Small models often put a place or object name here. Only refuse when it clearly names another camera.
+            try:
+                other = await memory._source(str(args["camera_id"]))
+            except ToolError:
+                other = None
+            if other is not None and other.id != query.source.source_id:
+                return {"error": f"analyze_video_clip only works on the selected camera ({query.source.name}), not {other.name}."}
         start, end = args.get("start_seconds"), args.get("end_seconds")
-        window = TimeWindow(start=float(start) if start is not None else None, end=float(end) if end is not None else None)
-        sub_query = AnalysisQuery(
+        request = UnderstandingRequest(
             question=str(args.get("question") or query.question),
             language="en",  # the agent reads it; the final answer is written in the user's language
             source=query.source,
-            window=window if (window.start is not None or window.end is not None) else None,
+            start_seconds=float(start) if start is not None else None,
+            end_seconds=float(end) if end is not None else None,
         )
+        video = VideoRef(prepared=prepared, local_path=await memory.local_media_path(), duration_seconds=query.source.duration_seconds)
         try:
-            result = await self.video.analyze(prepared.model_copy(update={"analyzer": "gemini"}), sub_query)
+            result = await self.understanding.understand(video, request)
         except AppError as exc:
-            return {"error": f"Video analysis failed: {exc.message}"}
+            return {"error": f"Video understanding failed: {exc.message}"}
         trace["escalated"] = True
+        trace.setdefault("understanding_providers", []).append(f"{result.provider}:{result.model}")
         usage.input_tokens = (usage.input_tokens or 0) + (result.usage.input_tokens or 0)
         usage.output_tokens = (usage.output_tokens or 0) + (result.usage.output_tokens or 0)
-        events.extend(e.model_copy(update={"evidence_level": "model_interpretation"}) for e in result.events)
+        events.extend(result.events)
         return {
             "evidence_level": "model_interpretation",
-            "observations": result.answer,
+            "provider": result.provider,
+            "observations": result.description,
+            "details": result.observations[:12],
             "confidence": result.confidence,
             "insufficient_evidence": result.insufficient_evidence,
             "timestamps": [t.model_dump() for t in result.timestamps],
-            "evidence": [e.description for e in result.evidence],
         }
 
     def _result(self, args: dict[str, Any], query: AnalysisQuery, usage: Usage, trace: dict[str, Any], events: list[DetectedEvent]) -> AnalysisResult:

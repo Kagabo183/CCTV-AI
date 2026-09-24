@@ -20,3 +20,13 @@ backend/models/
 backend/benchmark_output/
 backend/sample_videos/*.mp4
 backend/vision_artifacts/
+
+# Frames cut from our footage (benchmark review images, fine-tuning datasets): never commit video content
+datasets/
+bench/frames/
+bench/review/
+bench/peek_*.jpg
+backend/diagnosis_output/
+backend/diagnosis_person/
+backend/coverage_output/
+backend/.video_work/

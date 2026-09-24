@@ -23,10 +23,11 @@ from typing import Any
 import cv2
 import numpy as np
 
+from app.vision import frame_source
 from app.vision.detectors import ObjectDetector
 from app.vision.events import EventEngine, SceneConfig
 from app.vision.trackers import ObjectTracker
-from app.vision.types import TrackedObject, VisionEvent
+from app.vision.types import UNKNOWN, TrackedObject, VisionEvent, resolve_label
 
 
 @dataclass
@@ -43,7 +44,12 @@ class TrackSummary:
 
     @property
     def object_class(self) -> str:
+        """The most frequent raw detector class (may be wrong: see resolved())."""
         return self.classes.most_common(1)[0][0]
+
+    def resolved(self, confirm_confidence: float, min_class_share: float) -> tuple[str, str, bool]:
+        """(label, candidate, uncertain): 'unknown' unless confident and stable."""
+        return resolve_label(dict(self.classes), self.mean_confidence, confirm_confidence=confirm_confidence, min_class_share=min_class_share)
 
     @property
     def mean_confidence(self) -> float:
@@ -114,12 +120,15 @@ class VisionPipeline:
             raise ValueError("Could not open the video for local analysis")
         src_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        if max_seconds is not None and total_frames:
+            total_frames = min(total_frames, int(max_seconds * src_fps))  # progress over the part we analyse
         width, height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         step = max(1, round(src_fps / self.sample_fps))
         effective_fps = src_fps / step
 
         self.tracker.reset()
         engine = EventEngine(self.scene)
+        confirm = self.scene.rules.confirm_confidence
         writer = _open_writer(annotate_to, effective_fps, (width, height)) if annotate_to else None
 
         events: list[VisionEvent] = []
@@ -129,27 +138,25 @@ class VisionPipeline:
         det_latency: list[float] = []
         trk_latency: list[float] = []
         det_by_class: dict[str, list[float]] = defaultdict(list)
+        peak: dict[str, tuple[int, float]] = {}
         next_snapshot = 0.0
-        frame_index = processed = 0
+        processed = 0
         timestamp = 0.0
 
         process = psutil.Process()
         process.cpu_percent(None)
         started = time.perf_counter()
+        end_frame = int(max_seconds * src_fps) + 1 if max_seconds is not None else None
+        remote = str(path).startswith(("http://", "https://"))
+        if remote and total_frames > src_fps * 120:
+            # online stream longer than 2 minutes: several connections read segments in parallel
+            cap.release()
+            source = frame_source.parallel(str(path), src_fps, step, min(total_frames, end_frame or total_frames))
+        else:
+            source = frame_source.sequential(cap, step, end_frame)
         try:
-            while True:
-                ok = cap.grab()
-                if not ok:
-                    break
-                if frame_index % step:
-                    frame_index += 1
-                    continue
-                ok, frame = cap.retrieve()
-                if not ok:
-                    break
+            for frame_index, frame in source:
                 timestamp = frame_index / src_fps
-                if max_seconds is not None and timestamp > max_seconds:
-                    break
 
                 t0 = time.perf_counter()
                 detections = self.detector.detect(frame)
@@ -164,17 +171,21 @@ class VisionPipeline:
                 events += engine.process(tracked, timestamp, (height, width))
                 frames.append({"t": round(timestamp, 3), "o": [[o.track_id, o.class_name, round(o.confidence, 2), *(round(v, 1) for v in o.bbox)] for o in tracked]})
                 _summarise(tracks, tracked)
+                labels = Counter(o.class_name if o.confidence >= confirm else UNKNOWN for o in tracked)
+                for cls, n in labels.items():
+                    if n > peak.get(cls, (0, 0.0))[0]:
+                        peak[cls] = (n, round(timestamp, 2))
                 if timestamp >= next_snapshot:
-                    snapshots.append(Snapshot(round(timestamp, 2), dict(Counter(o.class_name for o in tracked)), sorted(o.track_id for o in tracked)))
+                    snapshots.append(Snapshot(round(timestamp, 2), dict(labels), sorted(o.track_id for o in tracked)))
                     next_snapshot = timestamp + self.snapshot_interval
                 if writer is not None:
                     writer.write(annotate(frame, tracked, self.scene, timestamp))
 
                 processed += 1
-                frame_index += 1
                 if progress and total_frames and processed % 25 == 0:
-                    progress(min(frame_index / total_frames, 0.999))
+                    progress(min((frame_index + 1) / total_frames, 0.999))
         finally:
+            source.close()
             cap.release()
             if writer is not None:
                 writer.release()
@@ -183,9 +194,13 @@ class VisionPipeline:
         events += engine.finish(timestamp)
         events.sort(key=lambda e: e.timestamp)
         per_frame = [d + t for d, t in zip(det_latency, trk_latency)]
+        rules = self.scene.rules
+        resolved = [t.resolved(rules.confirm_confidence, rules.min_class_share) for t in tracks.values()]
         stats = {
             "detector": self.detector.name,
             "weights": self.detector.weights,
+            "model": self.detector.info(),
+            "confirm_confidence": rules.confirm_confidence,
             "tracker": self.tracker.name,
             "source_fps": round(src_fps, 2),
             "sample_fps": round(effective_fps, 2),
@@ -204,11 +219,16 @@ class VisionPipeline:
             "detections": {k: {"count": len(v), "mean_confidence": round(statistics.fmean(v), 3)} for k, v in sorted(det_by_class.items())},
             "tracks": {
                 "total": len(tracks),
-                "by_class": dict(Counter(t.object_class for t in tracks.values())),
+                "by_class": dict(Counter(label for label, _, _ in resolved)),
+                "raw_by_class": dict(Counter(t.object_class for t in tracks.values())),
+                "uncertain": sum(1 for _, _, u in resolved if u),
                 "short_lived": sum(1 for t in tracks.values() if t.last_seen - t.first_seen < 1.0),
                 "mean_seconds": round(statistics.fmean([t.last_seen - t.first_seen for t in tracks.values()]), 1) if tracks else 0.0,
             },
             "events": dict(Counter(e.event_type for e in events)),
+            # most objects of each class in view in one processed frame, and when (confident detections;
+            # the rest are counted as "unknown")
+            "max_simultaneous": {cls: {"count": n, "at": t} for cls, (n, t) in sorted(peak.items(), key=lambda kv: -kv[1][0])},
         }
         if progress:
             progress(1.0)

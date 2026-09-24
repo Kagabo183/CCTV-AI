@@ -17,10 +17,11 @@ Zone/line coordinates are normalised to [0, 1] so configs survive resolution cha
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.vision.types import VEHICLE_CLASSES, EvidenceLevel, TrackedObject, VisionEvent
+from app.vision.types import VEHICLE_CLASSES, EvidenceLevel, TrackedObject, VisionEvent, resolve_label
 
 Point = tuple[float, float]
 
@@ -75,6 +76,10 @@ class EventRules:
     dwell_seconds: float = 30.0
     loiter_seconds: float = 60.0
     crowd_threshold: int = 5
+    # Below this mean confidence (or with an unstable class) a track is "unknown":
+    # events describe it as unidentified and person/vehicle rules do not fire.
+    confirm_confidence: float = 0.5
+    min_class_share: float = 0.6
 
 
 @dataclass
@@ -122,10 +127,20 @@ class _TrackState:
     loiter_reported: bool = False
     line_sides: dict[str, int] = field(default_factory=dict)
     appeared_event: VisionEvent | None = None
+    votes: Counter = field(default_factory=Counter)
+    candidate: str = ""
+    uncertain: bool = False
 
     @property
     def mean_confidence(self) -> float:
         return self.confidence_sum / max(self.frames, 1)
+
+    @property
+    def display(self) -> str:
+        """How events name this track: never more certain than the evidence."""
+        if self.uncertain:
+            return f"unidentified object (possibly {self.candidate}, {self.mean_confidence:.2f})"
+        return self.object_class
 
 
 class EventEngine:
@@ -148,10 +163,14 @@ class EventEngine:
             state.last_seen = timestamp
             state.frames += 1
             state.confidence_sum += obj.confidence
+            state.votes[obj.class_name] += 1
+            state.object_class, state.candidate, state.uncertain = resolve_label(
+                state.votes, state.mean_confidence, confirm_confidence=self.rules.confirm_confidence, min_class_share=self.rules.min_class_share
+            )
             if not state.confirmed and state.frames >= 2 and timestamp - state.first_seen >= self.rules.min_track_seconds:
                 state.confirmed = True
                 state.appeared_event = self._event(
-                    "object_appeared", state.first_seen, state, f"{state.object_class} #{state.track_id} appeared in view",
+                    "object_appeared", state.first_seen, state, f"{state.display} #{state.track_id} appeared in view",
                     rule={"name": "track_confirmed", "min_track_seconds": self.rules.min_track_seconds},
                 )
                 events.append(state.appeared_event)
@@ -188,7 +207,7 @@ class EventEngine:
             object_class=state.object_class,
             zone=zone,
             evidence_level=EvidenceLevel.RULE,
-            metadata={"rule": rule},
+            metadata={"rule": rule, **({"candidate_class": state.candidate, "uncertain": True, "requires_vlm": True} if state.uncertain else {})},
         )
 
     def _zones(self, state: _TrackState, anchor: Point, t: float) -> list[VisionEvent]:
@@ -204,16 +223,16 @@ class EventEngine:
             if inside and not was_inside:
                 state.zones_in[zone.name] = t
                 if group:
-                    events.append(self._event(f"{group}_entered", t, state, f"{state.object_class} #{state.track_id} entered zone '{zone.name}'", zone=zone.name, rule={"name": "zone_entry", "anchor": "bbox_bottom_center"}))
+                    events.append(self._event(f"{group}_entered", t, state, f"{state.display} #{state.track_id} entered zone '{zone.name}'", zone=zone.name, rule={"name": "zone_entry", "anchor": "bbox_bottom_center"}))
             elif not inside and was_inside:
                 entered = state.zones_in.pop(zone.name)
                 state.dwell_reported.discard(zone.name)
                 if group:
-                    events.append(self._event(f"{group}_exited", t, state, f"{state.object_class} #{state.track_id} left zone '{zone.name}' after {t - entered:.0f}s", zone=zone.name, rule={"name": "zone_exit", "seconds_in_zone": round(t - entered, 1)}))
+                    events.append(self._event(f"{group}_exited", t, state, f"{state.display} #{state.track_id} left zone '{zone.name}' after {t - entered:.0f}s", zone=zone.name, rule={"name": "zone_exit", "seconds_in_zone": round(t - entered, 1)}))
             elif inside and zone.name not in state.dwell_reported and t - state.zones_in[zone.name] >= self.rules.dwell_seconds:
                 state.dwell_reported.add(zone.name)
                 seconds = t - state.zones_in[zone.name]
-                events.append(self._event("dwell_in_zone", state.zones_in[zone.name], state, f"{state.object_class} #{state.track_id} has stayed in zone '{zone.name}' for {seconds:.0f}s", zone=zone.name, rule={"name": "dwell", "threshold_seconds": self.rules.dwell_seconds, "measured_seconds": round(seconds, 1)}))
+                events.append(self._event("dwell_in_zone", state.zones_in[zone.name], state, f"{state.display} #{state.track_id} has stayed in zone '{zone.name}' for {seconds:.0f}s", zone=zone.name, rule={"name": "dwell", "threshold_seconds": self.rules.dwell_seconds, "measured_seconds": round(seconds, 1)}))
         return events
 
     def _lines(self, state: _TrackState, anchor: Point, t: float) -> list[VisionEvent]:
@@ -228,7 +247,7 @@ class EventEngine:
                 state.line_sides[line.name] = side
             if prev is not None and side != 0 and side != prev and line.spans(anchor):
                 direction = "entered" if prev < 0 < side else "exited"
-                events.append(self._event(f"{group}_{direction}", t, state, f"{state.object_class} #{state.track_id} crossed line '{line.name}' ({'entry' if direction == 'entered' else 'exit'} direction)", zone=line.name, rule={"name": "line_crossing", "direction": direction}))
+                events.append(self._event(f"{group}_{direction}", t, state, f"{state.display} #{state.track_id} crossed line '{line.name}' ({'entry' if direction == 'entered' else 'exit'} direction)", zone=line.name, rule={"name": "line_crossing", "direction": direction}))
         return events
 
     def _loitering(self, state: _TrackState, t: float) -> list[VisionEvent]:
@@ -249,8 +268,8 @@ class EventEngine:
             group = _group(state.object_class)
             for zone_name, entered in state.zones_in.items():
                 if group:
-                    events.append(self._event(f"{group}_exited", state.last_seen, state, f"{state.object_class} #{track_id} was last seen in zone '{zone_name}' ({state.last_seen - entered:.0f}s inside) and then lost from view", zone=zone_name, rule={"name": "zone_exit_by_track_loss"}))
-            events.append(self._event("object_disappeared", state.last_seen, state, f"{state.object_class} #{track_id} left the view after {state.last_seen - state.first_seen:.0f}s", rule={"name": "track_lost", "after_seconds": self.rules.disappear_after_seconds}))
+                    events.append(self._event(f"{group}_exited", state.last_seen, state, f"{state.display} #{track_id} was last seen in zone '{zone_name}' ({state.last_seen - entered:.0f}s inside) and then lost from view", zone=zone_name, rule={"name": "zone_exit_by_track_loss"}))
+            events.append(self._event("object_disappeared", state.last_seen, state, f"{state.display} #{track_id} left the view after {state.last_seen - state.first_seen:.0f}s", rule={"name": "track_lost", "after_seconds": self.rules.disappear_after_seconds}))
         return events
 
     def _crowd(self, t: float) -> list[VisionEvent]:

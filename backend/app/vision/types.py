@@ -24,19 +24,28 @@ class EvidenceLevel(StrEnum):
     MODEL_INTERPRETATION = "model_interpretation"
 
 
-# COCO classes that matter for CCTV. Detectors are restricted to these by default.
-CCTV_CLASSES = {
-    0: "person",
-    1: "bicycle",
-    2: "car",
-    3: "motorcycle",
-    5: "bus",
-    7: "truck",
-    24: "backpack",
-    26: "handbag",
-    28: "suitcase",
-}
-VEHICLE_CLASSES = frozenset({"bicycle", "car", "motorcycle", "bus", "truck"})
+# Vehicle labels across both vocabularies (COCO and Objects365).
+VEHICLE_CLASSES = frozenset({
+    "bicycle", "car", "motorcycle", "bus", "truck", "van", "suv", "pickup truck", "sports car", "machinery vehicle",
+    "tricycle", "scooter", "ambulance", "fire truck", "heavy truck", "train", "boat",
+})
+UNKNOWN = "unknown"
+
+
+def resolve_label(votes: dict[str, int], mean_confidence: float, *, confirm_confidence: float, min_class_share: float = 0.6) -> tuple[str, str, bool]:
+    """Decide what a track IS, honestly.
+
+    Returns (label, candidate_class, uncertain). The label is "unknown" when the
+    detector is not confident (mean confidence below confirm_confidence) or keeps
+    changing its mind about the class (top class under min_class_share of frames).
+    The candidate class is kept so the UI and agent can say "possibly a person".
+    """
+    if not votes:
+        return UNKNOWN, UNKNOWN, True
+    candidate, count = max(votes.items(), key=lambda kv: kv[1])
+    share = count / sum(votes.values())
+    uncertain = mean_confidence < confirm_confidence or share < min_class_share
+    return (UNKNOWN if uncertain else candidate), candidate, uncertain
 
 
 @dataclass(frozen=True)

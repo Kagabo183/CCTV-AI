@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fira_Code, Fira_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Dashboard pairing (ui-ux-pro-max "dashboard, data, analytics"): Fira Sans for text, Fira Code for numbers and times.
+const sans = Fira_Sans({ variable: "--font-sans-family", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const mono = Fira_Code({ variable: "--font-mono-family", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
   title: "Visionary · Talk to your cameras",
@@ -12,8 +13,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="rw" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="h-full">{children}</body>
+    <html lang="rw" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
+      {/* browser extensions (e.g. Grammarly) add attributes to <body> before React loads */}
+      <body className="h-full" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

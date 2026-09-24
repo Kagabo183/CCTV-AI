@@ -36,6 +36,22 @@ No Postgres/Redis handy? You can run with `DATABASE_URL=sqlite+aiosqlite:///./de
 cd backend && .venv/Scripts/python -m pytest
 ```
 
+## Adding videos: links, cameras, uploads
+
+Press **+** and paste almost any link. It is checked, then **imported** in the background as a browser-playable H.264 MP4, so every source plays in the page with model boxes and runs through local analysis:
+
+| Link | How it is imported |
+|---|---|
+| YouTube and other video sites, web pages with an embedded video | yt-dlp (needs Node.js for YouTube) |
+| Direct files (MP4, MOV, WebM, MKV, AVI, TS, …) | downloaded through the SSRF-safe client |
+| HLS `.m3u8` | recorded video downloaded whole; live HLS recorded as a clip |
+| RTSP cameras (`rtsp://user:pass@192.168.1.64:554/…`), MJPEG streams | a clip of the chosen length is recorded with ffmpeg |
+| Uploads (drag and drop) | stored; HEVC/AVI/variable-frame-rate files are converted |
+
+- Cameras on your LAN: add their network to `CAMERA_PRIVATE_NETWORKS` (e.g. `192.168.1.0/24`). All other private addresses stay blocked. Camera passwords are used for the recording only and are never stored.
+- Videos longer than `VIDEO_IMPORT_MAX_SECONDS` (default 30 min) are cut, and anything over 1080p is downscaled when re-encoded. NVIDIA GPUs encode with NVENC automatically.
+- Only import videos you have the right to use. Some sites (e.g. Vimeo) now require a login and are refused with a clear message.
+
 ## Local vision engine (detection → tracking → events)
 
 Runs on the GPU, using pretrained models downloaded on first use:
@@ -45,7 +61,11 @@ cd backend
 .venv/Scripts/pip install -r requirements-vision.txt
 .venv/Scripts/python scripts/benchmark_vision.py      # optional: compare YOLO/RT-DETR × ByteTrack/BoT-SORT
 ```
-Every uploaded or linked video is analysed automatically, and the **Activity** panel under the player shows the events. See [docs/VISION_BENCHMARK.md](docs/VISION_BENCHMARK.md) for the model comparison.
+Every uploaded or linked video is analysed automatically. The **Vision lab** compares detectors (COCO YOLO26s, Objects365 YOLO26s, RT-DETR), and **Objects detected** lists every class found, including `unknown` for detections the model wasn't sure about. Click an object to ask a vision-language model what it really is.
+
+Detectors are closed-set: they only know their class list and can confidently mislabel anything else. See [docs/DETECTOR_DIAGNOSIS.md](docs/DETECTOR_DIAGNOSIS.md) for the rabbit case, and [docs/VISION_BENCHMARK.md](docs/VISION_BENCHMARK.md) for speed.
+
+Open-ended questions ("what is that animal?") go to `VIDEO_UNDERSTANDING_PROVIDERS` (default `gemini,local_vlm`). For a local fallback, run `ollama pull qwen3-vl:8b` and set `LOCAL_VLM_MODEL=qwen3-vl:8b`.
 
 ## Turning on Gemini
 

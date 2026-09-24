@@ -51,10 +51,14 @@ class PlaybackOut(BaseModel):
 
 
 class VideoSourceIn(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    """A link to import. `auto` accepts anything: direct files, YouTube and other
+    video sites, HLS (.m3u8), MJPEG and RTSP camera streams."""
+
+    name: str | None = Field(default=None, max_length=200)  # default: the video's title
     location: str | None = Field(default=None, max_length=200)
-    kind: Literal["url", "local", "rtsp", "onvif", "nvr"] = "url"
+    kind: Literal["auto", "url", "rtsp", "local", "onvif", "nvr"] = "auto"
     uri: str = Field(min_length=1, max_length=2048)
+    clip_seconds: int | None = Field(default=None, ge=3, le=600)  # for live streams
 
 
 class VideoSourceUpdate(BaseModel):
@@ -72,6 +76,7 @@ class VideoSourceOut(ApiModel):
     status_message: str | None
     metadata: dict[str, Any]
     playback: PlaybackOut | None
+    import_progress: float | None = None  # 0..1 while status == "importing"
     created_at: datetime
 
 

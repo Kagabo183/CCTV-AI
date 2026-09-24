@@ -44,6 +44,25 @@ class UnsafeUrlError(ValidationFailed):
 class UrlPolicy:
     allowed_domains: tuple[str, ...] = ()
     allow_http: bool = False
+    # Private networks where the operator's own CCTV cameras/NVRs live (e.g.
+    # "192.168.1.0/24"). Addresses here are reachable; all other private,
+    # loopback and link-local addresses stay blocked. Empty = no LAN access.
+    camera_networks: tuple[str, ...] = ()
+
+    def in_camera_network(self, ip: str) -> bool:
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+            addr = addr.ipv4_mapped
+        return any(addr in ipaddress.ip_network(net, strict=False) for net in self.camera_networks)
+
+    def ip_allowed(self, ip: str) -> bool:
+        return is_public_ip(ip) or self.in_camera_network(ip)
+
+
+STREAM_SCHEMES = {"rtsp", "rtsps"}
 
 
 def _host_allowed(host: str, allowed_domains: Iterable[str]) -> bool:
@@ -60,16 +79,21 @@ def is_public_ip(ip: str) -> bool:
     return addr.is_global and not addr.is_multicast
 
 
-def check_url_syntax(url: str, policy: UrlPolicy) -> str:
-    """Validate everything that can be checked without DNS. Returns the host."""
+def check_url_syntax(url: str, policy: UrlPolicy, *, streams: bool = False) -> str:
+    """Validate everything that can be checked without DNS. Returns the host.
+
+    streams=True also accepts rtsp:// links and embedded credentials for camera
+    streams (the importer strips them before anything is stored).
+    """
     if len(url) > 2048:
         raise UnsafeUrlError("URL is too long")
     parts = urlsplit(url.strip())
+    scheme = parts.scheme.lower()
     schemes = {"https", "http"} if policy.allow_http else {"https"}
-    if parts.scheme.lower() not in schemes:
-        raise UnsafeUrlError(f"Only {' / '.join(sorted(schemes))} video URLs are supported")
-    if parts.username or parts.password:
-        raise UnsafeUrlError("URLs with embedded credentials are not allowed")
+    if streams:
+        schemes |= STREAM_SCHEMES
+    if scheme not in schemes:
+        raise UnsafeUrlError(f"Only {' / '.join(sorted(schemes))} links are supported")
     host = (parts.hostname or "").lower().rstrip(".")
     if not host:
         raise UnsafeUrlError("URL has no host")
@@ -77,21 +101,41 @@ def check_url_syntax(url: str, policy: UrlPolicy) -> str:
         port = parts.port
     except ValueError as exc:
         raise UnsafeUrlError("Invalid port") from exc
-    if port not in _ALLOWED_PORTS:
-        raise UnsafeUrlError("Non-standard ports are not allowed")
-    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+    if host == "localhost" or host.endswith((".localhost", ".internal")):
         raise UnsafeUrlError("Internal hosts are not allowed")
+    camera_ip = policy.in_camera_network(host)
     try:
-        if not is_public_ip(host):
-            raise UnsafeUrlError("Private or reserved IP addresses are not allowed")
+        if not policy.ip_allowed(host):
+            private = ipaddress.ip_address(host).is_private
+            hint = " Add the camera's network to CAMERA_PRIVATE_NETWORKS to allow it." if private else ""
+            raise UnsafeUrlError("Private or reserved IP addresses are not allowed." + hint)
     except ValueError:
         pass  # not an IP literal, it's a hostname
-    if not _host_allowed(host, policy.allowed_domains):
+    # Cameras use arbitrary ports (554, 8000, 8554...); public web hosts must use standard ones.
+    if not camera_ip and scheme not in STREAM_SCHEMES and port not in _ALLOWED_PORTS:
+        raise UnsafeUrlError("Non-standard ports are not allowed")
+    if (parts.username or parts.password) and not (streams and (camera_ip or scheme in STREAM_SCHEMES)):
+        raise UnsafeUrlError("URLs with embedded credentials are only allowed for camera streams")
+    if not camera_ip and not _host_allowed(host, policy.allowed_domains):
         raise UnsafeUrlError("This video host is not in the allowed domain list")
     return host
 
 
-async def resolve_public(host: str, port: int) -> list[str]:
+def strip_credentials(url: str) -> str:
+    """The URL with user:password removed, safe to store and display."""
+    parts = urlsplit(url)
+    if not (parts.username or parts.password):
+        return url
+    netloc = parts.hostname or ""
+    if ":" in netloc:  # IPv6 literal
+        netloc = f"[{netloc}]"
+    if parts.port:
+        netloc += f":{parts.port}"
+    return parts._replace(netloc=netloc).geturl()
+
+
+async def resolve_public(host: str, port: int, policy: UrlPolicy | None = None) -> list[str]:
+    """Resolve and require every address to be public (or in the camera allowlist)."""
     loop = asyncio.get_running_loop()
     try:
         infos = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -100,7 +144,8 @@ async def resolve_public(host: str, port: int) -> list[str]:
     ips = sorted({info[4][0] for info in infos})
     if not ips:
         raise UnsafeUrlError(f"Could not resolve host {host}")
-    if not all(is_public_ip(ip) for ip in ips):
+    allowed = policy.ip_allowed if policy else is_public_ip
+    if not all(allowed(ip) for ip in ips):
         raise UnsafeUrlError("Host resolves to a private or reserved address")
     return ips
 
@@ -108,11 +153,12 @@ async def resolve_public(host: str, port: int) -> list[str]:
 class _PublicOnlyBackend(httpcore.AsyncNetworkBackend):
     """Resolves, validates, then connects to the validated IP."""
 
-    def __init__(self) -> None:
+    def __init__(self, policy: UrlPolicy | None = None) -> None:
         self._inner = httpcore.AnyIOBackend()
+        self._policy = policy
 
     async def connect_tcp(self, host: str, port: int, timeout: float | None = None, local_address: str | None = None, socket_options: Any = None) -> httpcore.AsyncNetworkStream:
-        ips = await resolve_public(host, port)
+        ips = await resolve_public(host, port, self._policy)
         last_exc: Exception | None = None
         for ip in ips:
             try:
@@ -130,16 +176,16 @@ class _PublicOnlyBackend(httpcore.AsyncNetworkBackend):
 
 
 class _SafeTransport(httpx.AsyncHTTPTransport):
-    def __init__(self) -> None:
+    def __init__(self, policy: UrlPolicy | None = None) -> None:
         super().__init__(retries=0)
         # httpx has no public hook for the network backend; replace the pool
         # with one using our validating backend (TLS/SNI still use the hostname).
-        self._pool = httpcore.AsyncConnectionPool(ssl_context=httpx.create_ssl_context(), network_backend=_PublicOnlyBackend())
+        self._pool = httpcore.AsyncConnectionPool(ssl_context=httpx.create_ssl_context(), network_backend=_PublicOnlyBackend(policy))
 
 
-def safe_client(timeout: float = 30.0) -> httpx.AsyncClient:
+def safe_client(timeout: float = 30.0, policy: UrlPolicy | None = None) -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        transport=_SafeTransport(),
+        transport=_SafeTransport(policy),
         follow_redirects=False,
         trust_env=False,
         timeout=httpx.Timeout(timeout, connect=10.0),
@@ -148,12 +194,12 @@ def safe_client(timeout: float = 30.0) -> httpx.AsyncClient:
 
 
 @asynccontextmanager
-async def safe_stream(url: str, policy: UrlPolicy, *, method: str = "GET", headers: dict[str, str] | None = None) -> AsyncIterator[httpx.Response]:
+async def safe_stream(url: str, policy: UrlPolicy, *, method: str = "GET", headers: dict[str, str] | None = None, streams: bool = False) -> AsyncIterator[httpx.Response]:
     """Open a streaming response, validating the URL and every redirect hop."""
-    async with safe_client() as client:
+    async with safe_client(policy=policy) as client:
         current = url
         for _ in range(_MAX_REDIRECTS + 1):
-            check_url_syntax(current, policy)
+            check_url_syntax(current, policy, streams=streams)
             request = client.build_request(method, current, headers=headers)
             try:
                 response = await client.send(request, stream=True)

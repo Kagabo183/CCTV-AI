@@ -127,7 +127,7 @@ async def test_vision_service_persists_pipeline_output(engine: object, monkeypat
 
     monkeypatch.setattr(VideoGateway, "acquire", acquire)
     monkeypatch.setattr(VisionPipeline, "run", fake_run)
-    monkeypatch.setattr(vision_service, "_detector", lambda *a: type("D", (), {"name": "yolo", "weights": "w"})())
+    monkeypatch.setattr(vision_service, "_detector", lambda *a, **k: type("D", (), {"name": "yolo", "weights": "w"})())
 
     user_id, source_id = await seed(datetime(2026, 9, 23, 12, 0, tzinfo=UTC))
     async with get_sessionmaker()() as db:
@@ -171,7 +171,7 @@ async def test_model_comparison_keeps_runs_side_by_side(client, monkeypatch: pyt
 
     monkeypatch.setattr(VideoGateway, "acquire", acquire)
     monkeypatch.setattr(VisionPipeline, "run", fake_run)
-    monkeypatch.setattr(vision_service, "_detector", lambda name, *a: type("D", (), {"name": name, "weights": "w"})())
+    monkeypatch.setattr(vision_service, "_detector", lambda name, *a, **k: type("D", (), {"name": name, "weights": "w"})())
     monkeypatch.setattr(vision_service, "vision_available", lambda settings=None: True)
     from app.api.routes import vision as vision_routes
 
@@ -211,23 +211,34 @@ async def test_model_comparison_keeps_runs_side_by_side(client, monkeypatch: pyt
     assert len((await client.get(f"/api/video-sources/{sid}/vision/runs", headers=headers)).json()) == 2
 
 
-async def test_youtube_sources_explain_instead_of_failing(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+async def test_youtube_source_is_analysed_from_its_stream(client, monkeypatch: pytest.MonkeyPatch, fake_import: list[str]) -> None:  # type: ignore[no-untyped-def]
+    """YouTube links are analysed in place (from the online stream); "import" no longer downloads them."""
     from app.api.routes import vision as vision_routes
     from app.services import vision as vision_service
-    from tests.conftest import register
+    from tests.conftest import register, wait_imports
 
     for module in (vision_service, vision_routes):
         monkeypatch.setattr(module, "vision_available", lambda settings=None: True)
+    monkeypatch.setattr(vision_service.VisionService, "ensure", lambda self, source: _noop())
     headers = await register(client)
-    r = await client.post("/api/video-sources", json={"name": "yt", "uri": "https://www.youtube.com/watch?v=abc123"}, headers=headers)
-    assert r.status_code == 201, r.text  # registering still works; local analysis is simply skipped
-    sid = r.json()["id"]
+    async with get_sessionmaker()() as db:
+        user = (await db.execute(__import__("sqlalchemy").select(User))).scalars().first()
+        legacy = VideoSourceRecord(owner_id=user.id, name="watch", kind="url", uri="https://www.youtube.com/watch?v=1gi5qn1khVk", status="ready", source_metadata={"delivery": "youtube", "youtube_id": "1gi5qn1khVk"})
+        db.add(legacy)
+        await db.commit()
+        sid = legacy.id
 
     runs = (await client.get(f"/api/video-sources/{sid}/vision/runs", headers=headers)).json()
-    assert runs[0]["status"] == "unsupported" and "upload the video file" in runs[0]["unsupported_reason"]
-    r = await client.post(f"/api/video-sources/{sid}/vision/run", json={"detector": "rtdetr", "tracker": "bytetrack"}, headers=headers)
-    assert r.status_code == 422 and r.json()["code"] == "local_vision_unsupported"
-    assert vision_service._tasks == set()
+    assert all(r["status"] != "unsupported" for r in runs)  # local runs are possible without a stored copy
+
+    source = (await client.post(f"/api/video-sources/{sid}/import", headers=headers)).json()
+    await wait_imports()
+    assert source["status"] == "ready" and source["playback"]["type"] == "youtube" and source["metadata"]["analysis"] == "stream"
+    assert "stored_path" not in source["metadata"] and fake_import == []  # nothing was downloaded
+
+
+async def _noop() -> None:
+    return None
 
 
 async def test_retry_replaces_failed_run(engine: object, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -247,3 +258,92 @@ async def test_retry_replaces_failed_run(engine: object, monkeypatch: pytest.Mon
         await vision_service.VisionService(db, VideoGateway(get_settings())).start(source, "rtdetr", "bytetrack")
         runs = (await db.execute(__import__("sqlalchemy").select(VisionRun).where(VisionRun.detector == "rtdetr"))).scalars().all()
         assert [r.status for r in runs] == ["queued"]
+
+
+async def test_tracks_and_describe_with_vlm(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    """Uncertain tracks are listed honestly; 'describe' asks a VLM and stores its answer as model_interpretation."""
+    from app.understanding import factory
+    from app.understanding.base import UnderstandingResult
+    from tests.conftest import register
+
+    headers = await register(client)
+    async with get_sessionmaker()() as db:
+        user = (await db.execute(__import__("sqlalchemy").select(User))).scalars().first()
+        source = VideoSourceRecord(owner_id=user.id, name="Bunny", kind="upload", uri="x.mp4", status="ready", source_metadata={})
+        db.add(source)
+        await db.flush()
+        run = VisionRun(video_source_id=source.id, status="completed", detector="yolo", weights="yolo26s.pt", tracker="bytetrack", duration_seconds=60)
+        db.add(run)
+        await db.flush()
+        db.add(ObjectTrack(vision_run_id=run.id, video_source_id=source.id, track_id=7, object_class="unknown", first_seen=60, last_seen=67, frames=70,
+                           mean_confidence=0.41, max_confidence=0.66, track_metadata={"candidate_class": "person", "uncertain": True, "class_votes": {"person": 70}, "last_bbox": [1, 2, 3, 4]}))
+        await db.commit()
+        sid, rid = source.id, run.id
+
+    tracks = (await client.get(f"/api/video-sources/{sid}/vision/runs/{rid}/tracks", headers=headers)).json()
+    assert tracks[0]["object_class"] == "unknown" and tracks[0]["candidate_class"] == "person" and tracks[0]["uncertain"]
+
+    asked: list[str] = []
+
+    class FakeVLM:
+        name, model = "fake_vlm", "fake-1"
+
+        async def understand(self, video, request):  # type: ignore[no-untyped-def]
+            asked.append(request.question)
+            assert (request.start_seconds, request.end_seconds) == (59.5, 67.5)
+            return UnderstandingResult(description="A large white cartoon rabbit, not a person.", confidence=0.9, provider="fake_vlm", model="fake-1")
+
+    monkeypatch.setattr(factory, "get_understanding_provider", lambda: FakeVLM())
+    r = await client.post(f"/api/video-sources/{sid}/vision/runs/{rid}/tracks/7/describe", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["description"].startswith("A large white cartoon rabbit") and r.json()["evidence_level"] == "model_interpretation"
+    assert "guessed it is a 'person'" in asked[0]
+
+    events = (await client.get(f"/api/video-sources/{sid}/events?vision_run_id={rid}", headers=headers)).json()
+    assert [(e["evidence_level"], e["track_id"]) for e in events] == [("model_interpretation", 7)]
+    tracks = (await client.get(f"/api/video-sources/{sid}/vision/runs/{rid}/tracks", headers=headers)).json()
+    assert tracks[0]["object_class"] == "unknown"  # the detector's own label is never overwritten
+
+
+async def test_queue_position_cancel_and_restart_recovery(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    """Queued runs say what they wait for, can be cancelled, and nothing hangs forever after a restart."""
+    from datetime import timedelta
+
+    from app.api.routes import vision as vision_routes
+    from app.core.config import get_settings
+    from app.models import VideoSession
+    from app.services import vision as vision_service
+    from app.video.gateway import VideoGateway
+    from tests.conftest import register
+
+    monkeypatch.setattr(vision_routes, "vision_available", lambda settings=None: True)
+    headers = await register(client)
+    now = datetime.now(UTC)
+    async with get_sessionmaker()() as db:
+        user = (await db.execute(__import__("sqlalchemy").select(User))).scalars().first()
+        long_video = VideoSourceRecord(owner_id=user.id, name="Long HLS", kind="url", uri="https://x/a.m3u8", status="ready")
+        mine = VideoSourceRecord(owner_id=user.id, name="My upload", kind="upload", uri="u.mp4", status="ready")
+        stuck_import = VideoSourceRecord(owner_id=user.id, name="Cam", kind="rtsp", uri="rtsp://x/1", status="importing")
+        db.add_all([long_video, mine, stuck_import])
+        await db.flush()
+        running = VisionRun(video_source_id=long_video.id, status="running", detector="yolo_o365", weights="w", tracker="bytetrack", created_at=now - timedelta(minutes=2))
+        q1 = VisionRun(video_source_id=mine.id, status="queued", detector="yolo", weights="w", tracker="bytetrack", created_at=now - timedelta(minutes=1))
+        q2 = VisionRun(video_source_id=mine.id, status="queued", detector="rtdetr", weights="w", tracker="bytetrack", created_at=now)
+        db.add_all([running, q1, q2, VideoSession(video_source_id=mine.id, user_id=user.id, analyzer="agent", status="preparing")])
+        await db.commit()
+        ids = (mine.id, q1.id, q2.id)
+
+    runs = {r["detector"]: r for r in (await client.get(f"/api/video-sources/{ids[0]}/vision/runs", headers=headers)).json()}
+    assert runs["yolo"]["queue_position"] == 1 and runs["rtdetr"]["queue_position"] == 2
+    assert runs["yolo"]["waiting_for"].startswith("Long HLS (yolo_o365+bytetrack)")
+
+    r = await client.post(f"/api/video-sources/{ids[0]}/vision/runs/{ids[2]}/cancel", headers=headers)
+    assert r.status_code == 200 and r.json()["status"] == "cancelled"
+
+    counts = await vision_service.recover_after_restart(VideoGateway(get_settings()))
+    assert counts["interrupted"] == 1 and counts["sessions"] == 1 and counts["imports"] == 1
+    async with get_sessionmaker()() as db:
+        assert (await db.get(VisionRun, running.id)).status == "queued"  # interrupted runs start again
+        assert (await db.get(VisionRun, ids[1])).status == "queued"  # re-queued (not started in tests: vision disabled)
+        cam = (await db.execute(__import__("sqlalchemy").select(VideoSourceRecord).where(VideoSourceRecord.name == "Cam"))).scalar_one()
+        assert cam.status == "error" and "Try again" in cam.status_message

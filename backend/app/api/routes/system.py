@@ -52,3 +52,37 @@ async def public_config(gw: Gateway) -> PublicConfigOut:
         source_kinds=[k.value for k in gw.enabled_kinds()],
         default_language=settings.default_language,
     )
+
+
+_catalog: list[dict[str, object]] | None = None
+
+
+@router.get("/vision/models")
+async def vision_models() -> list[dict[str, object]]:
+    """Detectors available on this server: architecture, training dataset and full class list."""
+    import asyncio
+
+    global _catalog
+    if _catalog is None:
+        from app.vision.detectors import DEFAULT_WEIGHTS, MODEL_CARDS
+
+        def load() -> list[dict[str, object]]:
+            try:
+                from ultralytics import RTDETR, YOLO
+            except ImportError:
+                return []
+            weights_dir = get_settings().vision_weights_dir
+            out = []
+            for name, weights in DEFAULT_WEIGHTS.items():
+                path = weights_dir / weights
+                entry: dict[str, object] = {"detector": name, "weights": weights, **MODEL_CARDS[name], "downloaded": path.exists()}
+                if path.exists():
+                    model = (RTDETR if name == "rtdetr" else YOLO)(str(path))
+                    entry["classes"] = [model.names[i] for i in sorted(model.names)]
+                    entry["num_classes"] = len(model.names)
+                out.append(entry)
+            return out
+
+        _catalog = await asyncio.to_thread(load)
+    s = get_settings()
+    return [{**c, "active": c["detector"] == s.vision_detector, "class_filter": s.vision_classes or None} for c in _catalog]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef } from "react";
 import type { BoxTrack } from "@/lib/types";
 
 const COLORS: Record<string, string> = {
@@ -28,21 +28,36 @@ function frameAt(frames: BoxTrack["frames"], t: number): number {
 }
 
 /**
- * Draws a run's tracked boxes over the <video>, in sync with playback.
- * Boxes are in source-pixel coordinates; the video is letterboxed (object-contain),
+ * Draws a run's tracked boxes over the player, in sync with playback.
+ * `clock` returns the player's current time (HTML <video> or the YouTube player).
+ * Boxes are in source-pixel coordinates; the picture is letterboxed (contain),
  * so we map them into the displayed picture rectangle.
  */
-export function BoxOverlay({ videoRef, boxes, label }: { videoRef: RefObject<HTMLVideoElement | null>; boxes: BoxTrack; label: string }) {
+export function BoxOverlay({
+  clock,
+  boxes,
+  label,
+  highlightTrack = null,
+  technical = false,
+}: {
+  clock: () => number | null;
+  boxes: BoxTrack;
+  label: string;
+  highlightTrack?: number | null;
+  /** AI details on: track ids, confidence and the model name. Off: plain labels only. */
+  technical?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     let raf = 0;
     const maxGap = 2.5 / Math.max(boxes.sample_fps || 10, 1); // don't show stale boxes across long gaps
+    const confirm = boxes.confirm_confidence ?? 0.5; // below: the detector is not confident about the class
     const draw = () => {
       raf = requestAnimationFrame(draw);
-      const video = videoRef.current;
+      const now = clock();
       const canvas = canvasRef.current;
-      if (!video || !canvas) return;
+      if (now === null || !canvas) return;
       const dpr = window.devicePixelRatio || 1;
       const cw = canvas.clientWidth;
       const ch = canvas.clientHeight;
@@ -55,25 +70,32 @@ export function BoxOverlay({ videoRef, boxes, label }: { videoRef: RefObject<HTM
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
 
-      const [sw, sh] = boxes.resolution ?? [video.videoWidth, video.videoHeight];
+      const [sw, sh] = boxes.resolution ?? [0, 0];
       if (!sw || !sh) return;
       const scale = Math.min(cw / sw, ch / sh);
       const ox = (cw - sw * scale) / 2;
       const oy = (ch - sh * scale) / 2;
 
-      const i = frameAt(boxes.frames, video.currentTime + 0.001);
-      if (i < 0 || video.currentTime - boxes.frames[i].t > maxGap) return;
+      const i = frameAt(boxes.frames, now + 0.001);
+      if (i < 0 || now - boxes.frames[i].t > maxGap) return;
       ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
       ctx.lineWidth = 2;
       for (const [id, cls, conf, x1, y1, x2, y2] of boxes.frames[i].o) {
-        const color = COLORS[cls] ?? "#cccccc";
+        const uncertain = conf < confirm;
+        const highlighted = highlightTrack === id;
+        const color = uncertain ? "#9aa3b2" : (COLORS[cls] ?? "#e0e0e0");
         const x = ox + x1 * scale;
         const y = oy + y1 * scale;
         const w = (x2 - x1) * scale;
         const h = (y2 - y1) * scale;
-        ctx.strokeStyle = color;
+        ctx.setLineDash(uncertain ? [6, 4] : []);
+        ctx.lineWidth = highlighted ? 4 : 2;
+        ctx.strokeStyle = highlighted ? "#ffffff" : color;
         ctx.strokeRect(x, y, w, h);
-        const text = `#${id} ${cls} ${conf.toFixed(2)}`;
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2;
+        // Never state a weak guess as fact: "? person 0.41"
+        const text = technical ? `#${id} ${uncertain ? "? " : ""}${cls} ${conf.toFixed(2)}` : uncertain ? "?" : cls;
         const tw = ctx.measureText(text).width + 8;
         const ty = y > 16 ? y - 16 : y;
         ctx.fillStyle = color;
@@ -84,14 +106,14 @@ export function BoxOverlay({ videoRef, boxes, label }: { videoRef: RefObject<HTM
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [boxes, videoRef]);
+  }, [boxes, clock, highlightTrack, technical]);
 
   return (
     <>
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
-      <div className="pointer-events-none absolute bottom-14 right-3 rounded-md bg-black/60 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur">
-        {label}
-      </div>
+      {technical && label && (
+        <div className="pointer-events-none absolute bottom-14 right-3 rounded-md bg-black/60 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur">{label}</div>
+      )}
     </>
   );
 }

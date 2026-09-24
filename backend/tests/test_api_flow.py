@@ -2,35 +2,29 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
-from app.video.sources.base import MediaHandle
-from app.video.sources.url_source import UrlVideoSource
-from tests.conftest import register
+from tests.conftest import register, wait_imports
 
 VIDEO_URL = "https://videos.example.com/gate.mp4"
 
 
 @pytest.fixture(autouse=True)
-def fake_url_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def validate(self: UrlVideoSource) -> dict[str, Any]:
-        return {"host": "videos.example.com", "delivery": "download", "mime_type": "video/mp4", "size_bytes": 1234}
-
-    async def acquire(self: UrlVideoSource, workdir: Path, window: Any = None) -> MediaHandle:
-        return MediaHandle(mime_type="video/mp4", remote_uri=self.uri)
-
-    monkeypatch.setattr(UrlVideoSource, "validate", validate)
-    monkeypatch.setattr(UrlVideoSource, "acquire_media", acquire)
+def _offline_imports(fake_import: list[str]) -> None:
+    """Every test here registers links; imports are faked (no network)."""
 
 
 async def _source(client: httpx.AsyncClient, headers: dict[str, str], **body: str) -> dict[str, Any]:
     r = await client.post("/api/video-sources", json={"name": "Irembo", "location": "irembo", "uri": VIDEO_URL, **body}, headers=headers)
     assert r.status_code == 201, r.text
-    return r.json()
+    assert r.json()["status"] == "importing"
+    await wait_imports()
+    source = (await client.get(f"/api/video-sources/{r.json()['id']}", headers=headers)).json()
+    assert source["status"] == "ready", source
+    return source
 
 
 async def test_requires_auth(client: httpx.AsyncClient) -> None:
@@ -43,7 +37,8 @@ async def test_full_conversation_flow(client: httpx.AsyncClient) -> None:
     assert config["analyzer_is_mock"] is True and "gemini_api_key" not in str(config).lower()
 
     source = await _source(client, headers)
-    assert source["status"] == "ready" and source["playback"] == {"type": "direct", "url": VIDEO_URL}
+    assert source["uri"] == VIDEO_URL and source["metadata"]["stored_path"].endswith(".mp4")
+    assert source["playback"] == {"type": "proxy", "url": f"/api/video-sources/{source['id']}/stream"}  # served by us: box overlay works
 
     session = (await client.post(f"/api/video-sources/{source['id']}/open", headers=headers)).json()
     assert session["analyzer"] == "mock"
@@ -114,7 +109,9 @@ async def test_unsafe_url_is_rejected_by_api(client: httpx.AsyncClient, monkeypa
     headers = await register(client)
     r = await client.post("/api/video-sources", json={"name": "x", "uri": "https://169.254.169.254/latest/meta-data"}, headers=headers)
     assert r.status_code == 422 and r.json()["code"] == "unsafe_url"
-    r = await client.post("/api/video-sources", json={"name": "x", "kind": "rtsp", "uri": "rtsp://cam/stream"}, headers=headers)
+    r = await client.post("/api/video-sources", json={"name": "x", "uri": "rtsp://admin:pw@192.168.1.64:554/stream"}, headers=headers)
+    assert r.status_code == 422 and "CAMERA_PRIVATE_NETWORKS" in r.json()["detail"]  # LAN cameras need an explicit allowlist
+    r = await client.post("/api/video-sources", json={"name": "x", "kind": "onvif", "uri": "onvif://cam"}, headers=headers)
     assert r.status_code == 501
 
 
@@ -126,3 +123,46 @@ async def test_login_and_cookie_session(client: httpx.AsyncClient) -> None:
     ok = await client.post("/api/auth/login", json={"email": "CAROL@example.com", "password": "correct-horse-battery"})
     assert ok.status_code == 200 and "visionary_session" in ok.cookies
     assert (await client.get("/api/auth/me")).json()["email"] == "carol@example.com"
+
+
+async def test_links_of_every_kind_are_imported(client: httpx.AsyncClient, fake_import: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "camera_private_networks", ["192.168.1.0/24"])
+
+    headers = await register(client)
+    yt = (await client.post("/api/video-sources", json={"uri": "https://www.youtube.com/watch?v=1gi5qn1khVk"}, headers=headers)).json()
+    # YouTube is watched in place: ready at once, plays in the YouTube player, never downloaded
+    assert yt["status"] == "ready" and yt["playback"]["type"] == "youtube" and yt["metadata"]["delivery"] == "youtube"
+    cam = (await client.post("/api/video-sources", json={"name": "Gate", "uri": "rtsp://admin:secret@192.168.1.64:554/Streaming/Channels/101", "clip_seconds": 20}, headers=headers)).json()
+    await wait_imports()
+
+    yt = (await client.get(f"/api/video-sources/{yt['id']}", headers=headers)).json()
+    assert yt["name"] == "Fake title" and yt["status"] == "ready" and "stored_path" not in yt["metadata"]
+    assert "https://www.youtube.com/watch?v=1gi5qn1khVk" not in fake_import
+
+    cam = (await client.get(f"/api/video-sources/{cam['id']}", headers=headers)).json()
+    assert cam["kind"] == "rtsp" and cam["status"] == "ready"
+    assert "secret" not in str(cam) and cam["uri"] == "rtsp://192.168.1.64:554/Streaming/Channels/101"  # password never stored
+    assert "rtsp://admin:secret@192.168.1.64:554/Streaming/Channels/101" in fake_import  # but it was used for the capture
+
+    # stored copies are deleted with the source
+    stored = get_settings().upload_dir / cam["metadata"]["stored_path"]
+    assert stored.exists()
+    assert (await client.delete(f"/api/video-sources/{cam['id']}", headers=headers)).status_code == 204
+    assert not stored.exists()
+
+
+async def test_failed_import_is_reported_on_the_source(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.errors import ValidationFailed
+    from app.video import ingest
+
+    async def broken_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise ValidationFailed("The stream produced no video", code="import_failed")
+
+    monkeypatch.setattr(ingest, "run", broken_run)
+    headers = await register(client)
+    r = await client.post("/api/video-sources", json={"uri": VIDEO_URL}, headers=headers)
+    await wait_imports()
+    source = (await client.get(f"/api/video-sources/{r.json()['id']}", headers=headers)).json()
+    assert source["status"] == "error" and source["status_message"] == "The stream produced no video"
