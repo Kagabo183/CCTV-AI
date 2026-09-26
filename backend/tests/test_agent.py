@@ -226,3 +226,13 @@ def test_inline_final_answer_text_is_recovered() -> None:
     (call,) = inline_calls('{"name": "final_answer", "arguments": {"answer": "yes"}}')
     assert call.args == {"answer": "yes"}
     assert inline_calls("There are 9 elephants.") == []
+
+
+def test_yaml_style_final_answer_is_recovered() -> None:
+    from app.agent.llm import inline_calls
+
+    text = "answer: There are 10 zebras.\n\nconfidence: 0.8\nevidence:\n- [description: x]\n\nfinal_answer: Up to 10 zebras were seen at once."
+    (call,) = inline_calls(text)
+    assert call.args["answer"] == "Up to 10 zebras were seen at once."
+    (call,) = inline_calls("answer: About 3 hippos.\nconfidence: 0.6")
+    assert call.args["answer"] == "About 3 hippos."

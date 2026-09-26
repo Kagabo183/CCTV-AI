@@ -1,0 +1,463 @@
+{
+  "at": "2026-09-26 09:25:45",
+  "cameras": {
+    "rtsp": "c97dcd5a-1310-4f77-91b8-38f37cacc7db",
+    "h265": "2e0f202d-de73-414f-a907-f54af8f782b6",
+    "onvif": "2c9c9080-e9b2-48d1-93f2-6ab6b151ae7c",
+    "nvr": "72f4073f-f028-42e4-81dc-3c44eb898ad1",
+    "wildlife": "39fe91a2-bc97-41f2-a887-ed6223ca1ac1",
+    "gateway": "7267d325-2183-437a-9bbb-d284e1cec231"
+  },
+  "results": [
+    {
+      "check": "diagnosis rtsp -> OK",
+      "ok": true,
+      "detail": "OK: Camera connected. (6.4 s)"
+    },
+    {
+      "check": "diagnosis rtsp -> INVALID_CREDENTIALS",
+      "ok": true,
+      "detail": "INVALID_CREDENTIALS: The camera needs a username and password. (0.0 s)"
+    },
+    {
+      "check": "diagnosis rtsp -> AUTHENTICATION_FAILED",
+      "ok": true,
+      "detail": "AUTHENTICATION_FAILED: The camera is reachable but rejected the username or password. (2.0 s)"
+    },
+    {
+      "check": "diagnosis rtsp -> STREAM_NOT_FOUND",
+      "ok": true,
+      "detail": "STREAM_NOT_FOUND: The camera is reachable but this stream path does not exist. (0.0 s)"
+    },
+    {
+      "check": "diagnosis rtsp -> RTSP_DISABLED",
+      "ok": true,
+      "detail": "RTSP_DISABLED: The camera does not accept RTSP connections on this port. (2.0 s)"
+    },
+    {
+      "check": "diagnosis rtsp -> DNS_FAILED",
+      "ok": true,
+      "detail": "DNS_FAILED: The camera's host name could not be resolved. (0.0 s)"
+    },
+    {
+      "check": "diagnosis onvif -> AUTHENTICATION_FAILED",
+      "ok": true,
+      "detail": "AUTHENTICATION_FAILED: The camera is reachable but rejected the username or password. (0.2 s)"
+    },
+    {
+      "check": "diagnosis onvif -> ONVIF_DISABLED",
+      "ok": true,
+      "detail": "ONVIF_DISABLED: The camera does not answer ONVIF requests. (2.2 s)"
+    },
+    {
+      "check": "loopback guard: Visionary's own media port refused",
+      "ok": true,
+      "detail": "That address belongs to Visionary itself, not to a camera."
+    },
+    {
+      "check": "not-allowed private network refused",
+      "ok": true,
+      "detail": "This address is on a private network Visionary is not allowed to reach. Add the network to"
+    },
+    {
+      "check": "ONVIF discovery (authorised networks only)",
+      "ok": true,
+      "detail": "['DS-2CD2143G2-I', 'NVR4104-4KS2'] on ['127.0.0.1'] in 3.1 s"
+    },
+    {
+      "check": "1. add RTSP camera",
+      "ok": true,
+      "detail": "201 [{\"id\":\"c97dcd5a-1310-4f77-91b8-38f37cacc7db\",\"name\":\"Street (RTSP)\",\"location\":\"irembo\",\"kind\":\"camera_rtsp\",\"parent_id"
+    },
+    {
+      "check": "12. no credentials in API response",
+      "ok": true,
+      "detail": "response scanned for password/userinfo"
+    },
+    {
+      "check": "3. H.264 live via media server",
+      "ok": true,
+      "detail": "tracks=['H264'] ready after 0.1 s",
+      "seconds": 0.12711644172668457
+    },
+    {
+      "check": "live view token (HLS) accepted",
+      "ok": true,
+      "detail": "HLS playlist ok (sub stream), token expires in 300 s"
+    },
+    {
+      "check": "WebRTC WHEP playback",
+      "ok": true,
+      "detail": "first WebRTC frame 640x360 after 5.80 s",
+      "seconds": 5.795018434524536
+    },
+    {
+      "check": "stream without token refused",
+      "ok": true,
+      "detail": "status 401"
+    },
+    {
+      "check": "other user cannot see camera",
+      "ok": true,
+      "detail": "status 404"
+    },
+    {
+      "check": "VIEWER share: live yes, settings no",
+      "ok": true,
+      "detail": "live 200, settings 403"
+    },
+    {
+      "check": "snapshot",
+      "ok": true,
+      "detail": "215628 bytes"
+    },
+    {
+      "check": "4. add H.265 camera",
+      "ok": true,
+      "detail": "[{\"id\":\"2e0f202d-de73-414f-a907-f54af8f782b6\",\"name\":\"Parking (H.265)\",\"location\":null,\"kind\":\"camera_rtsp\",\"parent_id\":null,\"gateway_id\":null,\"state\":\"connecti"
+    },
+    {
+      "check": "4. H.265 live via media server",
+      "ok": true,
+      "detail": "tracks=['H265'] after 0.1 s"
+    },
+    {
+      "check": "4. H.265 camera in a browser without H.265 WebRTC (on-demand H.264 copy)",
+      "ok": true,
+      "detail": "first WebRTC frame 768x432 after 11.02 s"
+    },
+    {
+      "check": "2. add ONVIF camera",
+      "ok": true,
+      "detail": "[{\"id\":\"2c9c9080-e9b2-48d1-93f2-6ab6b151ae7c\",\"name\":\"Gate (ONVIF)\",\"location\":null,\"kind\":\"camera_onvif\",\"parent_id\":null,\"gateway_id\":null,\"state\":\"connecting"
+    },
+    {
+      "check": "2. ONVIF Profile T/Media2 + streams",
+      "ok": true,
+      "detail": "profiles=['S', 'T'] Simulated Hikvision DS-2CD2143G2-I streams=['main:1920', 'sub:640']"
+    },
+    {
+      "check": "2. ONVIF live",
+      "ok": true,
+      "detail": "ready after 0.3 s"
+    },
+    {
+      "check": "7. add NVR",
+      "ok": true,
+      "detail": "5 records"
+    },
+    {
+      "check": "7. NVR channels became cameras",
+      "ok": true,
+      "detail": "Office NVR \u00b7 Channel 1, Office NVR \u00b7 Channel 2, Office NVR \u00b7 Channel 3, Office NVR \u00b7 Channel 4"
+    },
+    {
+      "check": "7. every channel live",
+      "ok": true,
+      "detail": "4/4 online"
+    },
+    {
+      "check": "8. add wildlife camera",
+      "ok": true,
+      "detail": "[{\"id\":\"39fe91a2-bc97-41f2-a887-ed6223ca1ac1\",\"name\":\"Waterhole\",\"location\":\"akagera\",\"kind\":\"camera_rtsp\",\"parent_id\":n"
+    },
+    {
+      "check": "11. simultaneous streams",
+      "ok": true,
+      "detail": "{\"online\": 7, \"connecting\": 1}"
+    },
+    {
+      "check": "11. parallel viewers",
+      "ok": true,
+      "detail": "3/3 WebRTC sessions in 27.2 s"
+    },
+    {
+      "check": "live AI running c97dcd5a",
+      "ok": true,
+      "detail": "232 frames, 2.0 fps target, 37.9 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 2e0f202d",
+      "ok": true,
+      "detail": "187 frames, 2.0 fps target, 32.3 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 2c9c9080",
+      "ok": true,
+      "detail": "168 frames, 2.0 fps target, 37.2 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running d9706819",
+      "ok": true,
+      "detail": "149 frames, 2.0 fps target, 29.6 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 0b9a07ea",
+      "ok": true,
+      "detail": "134 frames, 2.0 fps target, 26.7 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 221f2337",
+      "ok": true,
+      "detail": "137 frames, 2.0 fps target, 50.3 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 2b3d113f",
+      "ok": true,
+      "detail": "140 frames, 2.0 fps target, 31.7 ms/frame, detectors=['yolo'], dropped=0"
+    },
+    {
+      "check": "live AI running 39fe91a2",
+      "ok": true,
+      "detail": "110 frames, 2.0 fps target, 33.7 ms/frame, detectors=['wildlife'], dropped=1"
+    },
+    {
+      "check": "10. events in the last 20 minutes (rtsp)",
+      "ok": true,
+      "detail": "person #2034 appeared in view; person #1696 left the view after 5s; person #1696 appeared in view",
+      "events": 114
+    },
+    {
+      "check": "10. events in the last 20 minutes (wildlife)",
+      "ok": true,
+      "detail": "animal #1844 appeared in view; unidentified object (possibly animal, 0.34) #1814 appeared in view; unidentified object (possibly animal, 0.45) #1779 left the view after 1s",
+      "events": 85
+    },
+    {
+      "check": "recording + playback of the last seconds",
+      "ok": true,
+      "detail": "1 span(s), 5175 KB MP4 in 0.50 s"
+    },
+    {
+      "check": "9/10. assistant (en): What is happening on Camera 3?",
+      "ok": true,
+      "detail": "[0.1 s, switched to Camera 3, tools ['get_current_objects', 'get_recent_events']] Right now (09:23:46) on Camera 3: 1 person. In the last 10 minutes there were 60 detection events. || live AI now: {'person': 1}",
+      "seconds": 0.05082845687866211,
+      "answer": "Right now (09:23:46) on Camera 3: 1 person. In the last 10 minutes there were 60 detection events."
+    },
+    {
+      "check": "9/10. assistant (en): What happened on Camera 3 in the last 20 minutes?",
+      "ok": true,
+      "detail": "[0.0 s, switched to Camera 3, tools ['count_objects', 'get_recent_events']] On Camera 3 between 09:03:46 and 09:23:46 (Kigali time): The highest number of people seen together was 3, at 09:22:14. In total, people were seen about 61 separate times. The highest number of cars seen together was 2,  || live AI now: {'person': 1}",
+      "seconds": 0.019794225692749023,
+      "answer": "On Camera 3 between 09:03:46 and 09:23:46 (Kigali time): The highest number of people seen together was 3, at 09:22:14. In total, people were seen about 61 separate times. The highest number of cars seen together was 2, at 09:22:04. In total, cars were seen about 21 separate times. The highest number of buses seen together was 1, at 09:21:53. In total, buses were seen about 3 separate times. The highest number of backpacks seen together was 1, at 09:22:14. 61+ events on Camera 3 between 09:03:46 and 09:23:46 (Kigali time): 31 object appeared, 30 object disappeared."
+    },
+    {
+      "check": "9/10. assistant (rw): Ni iki kiri kubera kuri Camera 3 ubu?",
+      "ok": true,
+      "detail": "[11.6 s, switched to Camera 3, tools ['get_current_objects', 'get_recent_events']] Muri iki gihe (09:23:54) kuri Camera 3: Abantu babiri, bisi imwe. Mu minota 10 ishize, habaye ibintu 60 byavumbuwe. || live AI now: {}",
+      "seconds": 11.554900646209717,
+      "answer": "Muri iki gihe (09:23:54) kuri Camera 3: Abantu babiri, bisi imwe. Mu minota 10 ishize, habaye ibintu 60 byavumbuwe."
+    },
+    {
+      "check": "9/10. assistant (rw): Ni iki cyabaye kuri Camera 3 mu minota 20 ishize?",
+      "ok": true,
+      "detail": "[1.4 s, switched to Camera 3, tools ['count_objects', 'get_recent_events']] Kuri Camera 3 hagati ya 09:03:59 na 09:23:59 (igihe cya Kigali): Umubare munini w'abantu babonetse bari kumwe ni 3, muri 09:22:14. Muri rusange, abantu babonetse incuro zigera kuri 63. Umubare munini w'imodoka zabonetse  || live AI now: {'car': 2}",
+      "seconds": 1.4118068218231201,
+      "answer": "Kuri Camera 3 hagati ya 09:03:59 na 09:23:59 (igihe cya Kigali): Umubare munini w'abantu babonetse bari kumwe ni 3, muri 09:22:14. Muri rusange, abantu babonetse incuro zigera kuri 63. Umubare munini w'imodoka zabonetse ziri kumwe ni 2, muri 09:22:04. Muri rusange, imodoka zabonetse incuro zigera kuri 21. Umubare munini wa bisi zabonetse hamwe ni 1, muri 09:21:53. Muri rusange, bisi zabonetse inshuro zigera kuri 3 zitandukanye. Umubare munini w'amasakoshi yabonetse hamwe ni 1, muri 09:22:14. Ibikorwa 61+ kuri Camera 3 hagati ya 09:03:59 na 09:23:59 (igihe cya Kigali): 31 byabonetse, 30 byarazimiye."
+    },
+    {
+      "check": "capability profile (ONVIF camera)",
+      "ok": true,
+      "detail": "{\"video\": true, \"audio\": true, \"talk\": false, \"ptz\": true, \"recording\": true, \"events\": true, \"h264\": true, \"h265\": false, \"substream\": true}"
+    },
+    {
+      "check": "stream usage (main / sub / AI / recording)",
+      "ok": true,
+      "detail": "{\"live_view\": \"main (High quality) or sub (Auto / Data saver)\", \"mobile\": \"sub\", \"ai\": \"main\", \"recording\": \"main\"}"
+    },
+    {
+      "check": "PTZ continuous move + stop",
+      "ok": true,
+      "detail": "pan 0.6 -> 1.0; presets ['Home', 'Gate']"
+    },
+    {
+      "check": "PTZ go to preset",
+      "ok": true,
+      "detail": "position {'pan': 0.6, 'tilt': -0.2, 'zoom': 0.3}"
+    },
+    {
+      "check": "PTZ refused without the ptz permission",
+      "ok": true,
+      "detail": "status 404"
+    },
+    {
+      "check": "ONVIF camera events (pull point) stored",
+      "ok": true,
+      "detail": "Motion (camera's own detector) after 2 s"
+    },
+    {
+      "check": "diagnostics on a connected camera",
+      "ok": true,
+      "detail": "reachable=ok, onvif=ok, authentication=ok, dns=ok, rtsp=ok, stream=ok, codec=ok, resolution=ok, fps=ok, latency=ok, stability=ok, audio=ok, ptz=ok, media_server=ok, ai_processing=ok, camera_events=ok"
+    },
+    {
+      "check": "discovery details (profiles, already added)",
+      "ok": true,
+      "detail": "DS-2CD2143G2-I profiles=['S', 'T'] already_added=True"
+    },
+    {
+      "check": "connector list is honest",
+      "ok": true,
+      "detail": "{\"onvif\": \"available\", \"rtsp\": \"available\", \"nvr\": \"available\", \"hls\": \"available\", \"gateway\": \"available\", \"imou\": \"needs_configuration\", \"hikvision\": \"via_standard\", \"dahua\": \"via_standard\", \"uniview\": \"via_standard\", \"axis\": \"via_standard\", \"reolink\": \"via_standard\", \"tp-link tapo\": \"via_standard\"}"
+    },
+    {
+      "check": "device service addresses not exposed",
+      "ok": true,
+      "detail": "{\"manufacturer\": \"Simulated Hikvision\", \"model\": \"DS-2CD2143G2-I\", \"firmware\": \"V5.7.3 build 220112\", \"serial\": \"DS-2CD2143G2-I20220101AAWRJ12345678\", \"onvif_profiles\": [\"S\", \"T\"], \"media_version\": 2}"
+    },
+    {
+      "check": "event memory: bounding box + clip reference",
+      "ok": true,
+      "detail": "153/153 events; e.g. object_appeared bbox=[224.4, 473.2, 316.5, 610.2]"
+    },
+    {
+      "check": "event opens its recording",
+      "ok": true,
+      "detail": "9469 KB"
+    },
+    {
+      "check": "batched GPU inference across cameras",
+      "ok": true,
+      "detail": "{\"yolo\": {\"batches\": 5257, \"frames\": 11752, \"mean_batch\": 2.24}, \"wildlife\": {\"batches\": 708, \"frames\": 708, \"mean_batch\": 1.0}}"
+    },
+    {
+      "check": "assistant (en): Are there any animals on Waterhole?",
+      "ok": true,
+      "detail": "[0.0 s, route live_animals, en: ] Animals on Waterhole: visible right now: 3 unknown animals, 2 possible hippopotamus, 1 possible lion, 1 hippopotamus. Between 08:24:19 and 09:24:19 (Kigali time): possible lowland tapir: first seen at",
+      "answer": "Animals on Waterhole: visible right now: 3 unknown animals, 2 possible hippopotamus, 1 possible lion, 1 hippopotamus. Between 08:24:19 and 09:24:19 (Kigali time): possible lowland tapir: first seen at 09:22:39, last seen at 09:22:40; possible grevy's zebra: first seen at 09:22:41, last seen at 09:22:50; plains zebra: first seen at 09:22:51, last seen at 09:23:47; unknown animal: first seen at 09:23:10, last seen at 09:24:19; possible plains zebra: first seen at 09:23:14, last seen at 09:23:40; possible rhinoceros: first seen at 09:23:17, last seen at 09:23:39; possible buffalo: first seen at 09:23:30, last seen at 09:23:46; possible common magpie: first seen at 09:23:36, last seen at 09:23:39; possible giant otter: first seen at 09:23:58, last seen at 09:24:05; possible hippopotamus: first seen at 09:24:07, last seen at 09:24:19; hippopotamus: first seen at 09:24:07, last seen at 09:24:19; possible lion: first seen at 09:24:09, last seen at 09:24:19. 'possible' and 'animal' mean the species classifier was not confident."
+    },
+    {
+      "check": "assistant (en): When did the zebra arrive on Waterhole?",
+      "ok": true,
+      "detail": "[0.0 s, route live_arrival, en: ] The first possible grevy's zebra was seen at 09:22:41; it was last seen at 09:22:50. The species is not certain.",
+      "answer": "The first possible grevy's zebra was seen at 09:22:41; it was last seen at 09:22:50. The species is not certain."
+    },
+    {
+      "check": "assistant (en): How many people are there on Camera 3?",
+      "ok": true,
+      "detail": "[0.0 s, route live_count, en: ] Right now there are 2 people in view. In the last 10 minutes, the camera saw up to 3 people at once.",
+      "answer": "Right now there are 2 people in view. In the last 10 minutes, the camera saw up to 3 people at once."
+    },
+    {
+      "check": "assistant (rw): Ni izihe nyamaswa ziri kuri Waterhole?",
+      "ok": true,
+      "detail": "[7.1 s, route live_animals, en: Animals on Waterhole: visible right now: 3 unknown animals, 2 possible hippopotamus, 1 possible lion, 1 hippopotamus. Be] Inyamaswa ziri kuri Waterhole: bigaragara ubu: inyamaswa 3 zitazwi, inyamaswa 2 zishoboka (imvubu), inyamaswa 1 zishoboka (intare), inyamaswa 1 (imvubu). Hagati ya 08:24:19 na 09:24:19 (igihe cya Kiga",
+      "answer": "Inyamaswa ziri kuri Waterhole: bigaragara ubu: inyamaswa 3 zitazwi, inyamaswa 2 zishoboka (imvubu), inyamaswa 1 zishoboka (intare), inyamaswa 1 (imvubu). Hagati ya 08:24:19 na 09:24:19 (igihe cya Kigali): inyamaswa zishobora kuba ari inyamaswa zo mu bibaya: zibonekewe bwa mbere muri 09:22:39, zibonekewe bwa nyuma muri 09:22:40; inyamaswa zishobora kuba ari inyamaswa zo mu bwoko bwa grevy (imparage): zibonekewe bwa mbere muri 09:22:41, zibonekewe bwa nyuma muri 09:22:50; inyamaswa (imparage): zibonekewe bwa mbere muri 09:22:51, zibonekewe bwa nyuma muri 09:23:47; inyamaswa zitazwi: zibonekewe bwa mbere muri 09:23:10, zibonekewe bwa nyuma muri 09:24:19; inyamaswa zishobora kuba (imparage): zibonekewe bwa mbere muri 09:23:14, zibonekewe bwa nyuma muri 09:23:40; inyamaswa zishobora kuba (inkura): zibonekewe bwa mbere muri 09:23:17, zibonekewe bwa nyuma muri 09:23:39; inyamaswa zishobora kuba (imbogo): zibonekewe bwa mbere muri 09:23:30, zibonekewe bwa nyuma muri 09:23:46; inyamaswa zishobora kuba 09:23:36, zibonekewe bwa nyuma muri 09:23:39; inyamaswa zishobora kuba 09:23:58, zibonekewe \"bishoboka\" na \"inyamaswa\" bisobanura ko ushinzwe gushyira ubwoko mu byiciro atari yizeye."
+    },
+    {
+      "check": "assistant (rw): Hari abantu bangahe kuri Camera 3?",
+      "ok": true,
+      "detail": "[1.0 s, route live_count, en: Right now there is 1 person in view. In the last 10 minutes, the camera saw up to 3 people at once.] Muri iki gihe hari umuntu umwe ubona. Mu minota 10 ishize, kamera yabonye abantu bagera kuri 3 icyarimwe.",
+      "answer": "Muri iki gihe hari umuntu umwe ubona. Mu minota 10 ishize, kamera yabonye abantu bagera kuri 3 icyarimwe."
+    },
+    {
+      "check": "assistant (rw): Ni iki cyabaye kuri Camera 3 mu minota icumi ishize?",
+      "ok": true,
+      "detail": "[1.7 s, route live_period, en: On Camera 3 between 09:14:28 and 09:24:28 (Kigali time): The highest number of people seen together was 3, at 09:22:14. ] Kuri Camera 3 hagati ya 09:14:28 na 09:24:28 (igihe cya Kigali): Umubare munini w'abantu babonetse bari kumwe ni 3, muri 09:22:14. Muri rusange, abantu babonetse incuro zigera kuri 78. Umubare munini ",
+      "answer": "Kuri Camera 3 hagati ya 09:14:28 na 09:24:28 (igihe cya Kigali): Umubare munini w'abantu babonetse bari kumwe ni 3, muri 09:22:14. Muri rusange, abantu babonetse incuro zigera kuri 78. Umubare munini w'imodoka zabonetse ziri kumwe ni 2, muri 09:22:04. Muri rusange, imodoka zabonetse incuro zigera kuri 31. Umubare munini wa bisi zabonetse hamwe ni 1, muri 09:21:53. Muri rusange, bisi zabonetse inshuro zigera kuri 4. Umubare munini w'amasakoshi yabonetse hamwe ni 1, muri 09:22:14. Muri rusange, udusanduku tw'umugongo twabonetse incuro zigera kuri ebyiri. Ibikorwa 61+ kuri Camera 3 hagati ya 09:14:28 na 09:24:28 (igihe cya Kigali): 31 byabonetse, 30 byarazimiye."
+    },
+    {
+      "check": "assistant (rw): Ni iki kiri kuri camera yo ku irembo?",
+      "ok": true,
+      "detail": "[1.3 s, route live_now, en: Right now (09:24:29) on Camera 3: no people, vehicles or animals detected. Plus 1 object the detector is not sure about.] Muri iki gihe (09:24:29) kuri Camera ya 3: nta bantu, imodoka cyangwa inyamaswa byagaragaye. Uretse n'ikintu kimwe kitamenyekanye neza. Mu minota 10 ishize, habaye ibintu 60 byavumbuwe.",
+      "answer": "Muri iki gihe (09:24:29) kuri Camera ya 3: nta bantu, imodoka cyangwa inyamaswa byagaragaye. Uretse n'ikintu kimwe kitamenyekanye neza. Mu minota 10 ishize, habaye ibintu 60 byavumbuwe."
+    },
+    {
+      "check": "6. connection loss detected",
+      "ok": true,
+      "detail": "state=stream_error diagnosis=STREAM_NOT_FOUND after 2.7 s"
+    },
+    {
+      "check": "6. auto-reconnect",
+      "ok": true,
+      "detail": "back online after 6.6 s, reconnects=1",
+      "seconds": 6.573117256164551
+    },
+    {
+      "check": "5. gateway created with one-time enrolment code",
+      "ok": true,
+      "detail": "expires 2026-09-26T08:24:40.047314+00:00"
+    },
+    {
+      "check": "5. gateway enrolled",
+      "ok": true,
+      "detail": "Enrolled as gateway 92ef313b-9b35-4eb2-aa78-c97507d92610. Start it with: run"
+    },
+    {
+      "check": "5. enrolment code works only once",
+      "ok": true,
+      "detail": "tity\"\nEnrolment failed: This enrolment code is invalid or has expired. Create a new one in Gateways."
+    },
+    {
+      "check": "5. gateway online (outbound WebSocket)",
+      "ok": true,
+      "detail": "after 0.7 s"
+    },
+    {
+      "check": "5. camera tested by the gateway on its LAN",
+      "ok": true,
+      "detail": "OK in 11.1 s"
+    },
+    {
+      "check": "5. add camera via gateway",
+      "ok": true,
+      "detail": "[{\"id\":\"7267d325-2183-437a-9bbb-d284e1cec231\",\"name\":\"Barn (via gateway)\",\"location\":null,\"kind\":\"camera_rtsp\",\"parent_i"
+    },
+    {
+      "check": "5. gateway pushes the stream (hub never connects to the camera)",
+      "ok": true,
+      "detail": "online after 13.9 s, media source = rtspSession"
+    },
+    {
+      "check": "5. live view of a gateway camera",
+      "ok": true,
+      "detail": "first WebRTC frame 1280x720 after 5.43 s"
+    },
+    {
+      "check": "5. gateway loss diagnosed",
+      "ok": true,
+      "detail": "gateway_offline after 7.0 s"
+    },
+    {
+      "check": "5. gateway reconnect restores the stream",
+      "ok": true,
+      "detail": "online again after 13.1 s"
+    },
+    {
+      "check": "5. revoked gateway is disconnected",
+      "ok": true,
+      "detail": "revoked"
+    },
+    {
+      "check": "12. no password in camera/video APIs",
+      "ok": true,
+      "detail": "leaks=[]"
+    },
+    {
+      "check": "12. no password in logs",
+      "ok": true,
+      "detail": "scanned 549503 chars"
+    },
+    {
+      "check": "12. no internal media secret in logs",
+      "ok": true,
+      "detail": "media server + backend logs"
+    },
+    {
+      "check": "12. media server config has no camera passwords",
+      "ok": true,
+      "detail": "paths are added at runtime via the local API"
+    },
+    {
+      "check": "media auth hook rejects anonymous / non-local calls",
+      "ok": true,
+      "detail": "status 403"
+    },
+    {
+      "check": "12. password encrypted at rest",
+      "ok": true,
+      "detail": "dev.db scanned"
+    }
+  ]
+}

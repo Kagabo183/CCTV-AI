@@ -5,6 +5,7 @@ import { formatTime } from "@/lib/api";
 import type { BoxTrack, VideoSession, VideoSource } from "@/lib/types";
 import { loadYouTubeApi, youtubeIdFromEmbed, type YTPlayer } from "@/lib/youtube";
 import { BoxOverlay } from "./BoxOverlay";
+import { LivePlayer } from "./cameras/LivePlayer";
 import { AlertIcon, BoxIcon, CameraIcon } from "./icons";
 
 export type VideoStageHandle = { seek: (seconds: number) => void };
@@ -14,7 +15,7 @@ type Props = {
   source: VideoSource | null;
   session: VideoSession | null;
   analyzerIsMock: boolean;
-  overlay?: { boxes: BoxTrack; label: string; highlightTrack?: number | null } | null;
+  overlay?: { boxes: BoxTrack; label: string; highlightTrack?: number | null; only?: Set<number> | null; labels?: Record<number, string> | null } | null;
   /** Detections exist for this video: show the on-video toggle. */
   boxesAvailable?: boolean;
   showBoxes?: boolean;
@@ -150,7 +151,9 @@ export function VideoStage({ source, analyzerIsMock, overlay, boxesAvailable, sh
   return (
     <div className="space-y-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-line bg-black">
-        {youtubeId ? (
+        {playback?.type === "webrtc" ? (
+          <LivePlayer cameraId={source.id} label={source.name} />
+        ) : youtubeId ? (
           <div ref={ytHost} className="h-full w-full [&>iframe]:h-full [&>iframe]:w-full" title={source.name} />
         ) : playback ? (
           <video
@@ -168,7 +171,7 @@ export function VideoStage({ source, analyzerIsMock, overlay, boxesAvailable, sh
             onError={() => setPlayError(true)}
           />
         ) : null}
-        {overlay && playback && !playError && <BoxOverlay clock={clock} boxes={overlay.boxes} label={overlay.label} highlightTrack={overlay.highlightTrack ?? null} technical={technical} />}
+        {overlay && playback && playback.type !== "webrtc" && !playError && <BoxOverlay clock={clock} boxes={overlay.boxes} label={overlay.label} highlightTrack={overlay.highlightTrack ?? null} technical={technical} only={overlay.only ?? null} labels={overlay.labels ?? null} />}
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-black/70 to-transparent p-3">
           <div className={`hidden max-w-[50%] items-center gap-2 truncate rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-white/90 backdrop-blur ${youtubeId ? "" : "sm:flex"}`}>
@@ -187,7 +190,11 @@ export function VideoStage({ source, analyzerIsMock, overlay, boxesAvailable, sh
                 <BoxIcon width={13} height={13} aria-hidden /> {showBoxes ? "Hide" : "Show"} detections
               </button>
             )}
-            <div className="rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur">{formatTime(current)}</div>
+            {playback?.type === "webrtc" ? (
+              <div className="rounded-md bg-danger/85 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">Live</div>
+            ) : (
+              <div className="rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur">{formatTime(current)}</div>
+            )}
           </div>
         </div>
 

@@ -188,3 +188,47 @@ export const BellIcon = (p: P) => (
     <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16ZM10 20.5a2 2 0 0 0 4 0" />
   </svg>
 );
+export const GridIcon = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+    <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+    <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+  </svg>
+);
+export const ServerIcon = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="7" rx="1.5" />
+    <rect x="3" y="13" width="18" height="7" rx="1.5" />
+    <path d="M7 7.5h.01M7 16.5h.01" />
+  </svg>
+);
+export const FilmIcon = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+  </svg>
+);
+export const PulseIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 12h4l2-6 4 12 2-6h6" />
+  </svg>
+);
+export const RefreshIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M20 11a8 8 0 0 0-14.5-4.5L3 9" />
+    <path d="M3 4v5h5" />
+    <path d="M4 13a8 8 0 0 0 14.5 4.5L21 15" />
+    <path d="M21 20v-5h-5" />
+  </svg>
+);
+export const ShieldIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z" />
+  </svg>
+);
+export const CheckIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+);

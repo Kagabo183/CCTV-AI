@@ -15,6 +15,8 @@ type Props = {
   onAnalyse: () => void;
   onImport?: () => void;
   onAskAbout: (question: string) => void;
+  /** The wildlife pipeline has species for this video: drop the general detector's animal guesses. */
+  hideAnimals?: boolean;
 };
 
 const ICONS: Record<Group["key"], ReactNode> = {
@@ -26,7 +28,7 @@ const ICONS: Record<Group["key"], ReactNode> = {
 };
 
 /** What the camera saw and what happened, in plain language. Technical detail lives in AI details. */
-export function Insights({ findings, notableEvents, runs, onSeek, onAnalyse, onImport, onAskAbout }: Props) {
+export function Insights({ findings, notableEvents, runs, onSeek, onAnalyse, onImport, onAskAbout, hideAnimals }: Props) {
   const running = runs.find((r) => r.status === "running" || r.status === "queued");
   const unsupported = runs.length === 1 && runs[0].status === "unsupported" ? runs[0] : null;
   const disabled = runs.length === 1 && runs[0].status === "disabled";
@@ -62,7 +64,7 @@ export function Insights({ findings, notableEvents, runs, onSeek, onAnalyse, onI
         <SkeletonCards />
       ) : (
         <>
-          <GroupCards findings={findings} notable={notableEvents.length} onSeek={onSeek} onAskAbout={onAskAbout} />
+          <GroupCards findings={findings} notable={notableEvents.length} onSeek={onSeek} onAskAbout={onAskAbout} hideAnimals={hideAnimals} />
           <KeyMoments findings={findings} events={notableEvents} onSeek={onSeek} />
           <div className="rounded-2xl border border-line bg-panel">
             <ActivityChart timeline={findings.timeline} duration={findings.duration} events={notableEvents} onSeek={onSeek} />
@@ -73,8 +75,8 @@ export function Insights({ findings, notableEvents, runs, onSeek, onAnalyse, onI
   );
 }
 
-function GroupCards({ findings, notable, onSeek, onAskAbout }: { findings: Findings; notable: number; onSeek: (s: number) => void; onAskAbout: (q: string) => void }) {
-  const list = groups(findings);
+function GroupCards({ findings, notable, onSeek, onAskAbout, hideAnimals }: { findings: Findings; notable: number; onSeek: (s: number) => void; onAskAbout: (q: string) => void; hideAnimals?: boolean }) {
+  const list = groups(findings).filter((g) => !(hideAnimals && g.key === "animals"));
   if (!list.length) return <Empty>Nothing was clearly seen in this video.</Empty>;
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

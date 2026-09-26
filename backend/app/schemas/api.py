@@ -46,7 +46,7 @@ class AuthOut(BaseModel):
 
 
 class PlaybackOut(BaseModel):
-    type: Literal["direct", "youtube", "proxy"]
+    type: Literal["direct", "youtube", "proxy", "webrtc"]
     url: str
 
 

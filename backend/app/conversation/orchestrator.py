@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.video.sources.live import LIVE_KINDS
 from app.analyzers.base import AnalysisQuery, AnalysisResult, SourceContext, VideoAnalyzer
 from app.conversation.context import ConversationState, build_history
 from app.core.config import get_settings
@@ -103,7 +104,8 @@ class ConversationOrchestrator:
                 name=source.name,
                 location=source.location,
                 kind=source.kind,
-                duration_seconds=source.source_metadata.get("duration_seconds"),
+                is_live=source.kind in LIVE_KINDS,
+                duration_seconds=None if source.kind in LIVE_KINDS else source.source_metadata.get("duration_seconds"),
             ),
             history=history,
             context_notes=state.notes(),

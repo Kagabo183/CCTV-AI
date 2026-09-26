@@ -5,7 +5,7 @@ export type User = {
   preferred_language: string;
 };
 
-export type Playback = { type: "direct" | "youtube" | "proxy"; url: string };
+export type Playback = { type: "direct" | "youtube" | "proxy" | "webrtc"; url: string };
 
 export type VideoSource = {
   id: string;
@@ -164,6 +164,8 @@ export type Track = {
   frames: number;
   class_votes: Record<string, number>;
   last_bbox: number[];
+  /** Wildlife runs: the species verdict for this animal (never forced when uncertain). */
+  wildlife?: { species: string | null; candidate: string | null; certain: boolean; score: number; display: string; scientific?: string | null; crops?: number } | null;
 };
 
 export type DescribeResult = {

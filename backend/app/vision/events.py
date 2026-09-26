@@ -9,6 +9,13 @@ but only things the rules can actually establish from positions over time:
   dwell_in_zone                          stayed inside a zone longer than dwell_seconds
   loitering                              a person stayed in view (or in a zone) longer than loiter_seconds
   crowd_detected                         people in view >= crowd_threshold
+  animal_entered / animal_exited         an animal's anchor crossed into/out of a zone or over a line
+  animal_group_detected                  animals in view >= animal_group_threshold
+  animal_approaching_restricted_area     an animal came within approach_margin of a zone of kind "restricted"
+  animal_in_restricted_area              an animal entered a zone of kind "restricted"
+  wildlife_near_infrastructure           an animal entered / came near a zone of kind "infrastructure"
+  unusual_movement                       an animal moved faster than fast_movement (frame widths per second)
+  (dwell_in_zone also applies to animals: "animal remaining in zone")
 
 Every event records the rule and measured values in `metadata["rule"]`, so an
 answer can say *why* it believes something. Nothing here infers intent.
@@ -21,7 +28,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.vision.types import VEHICLE_CLASSES, EvidenceLevel, TrackedObject, VisionEvent, resolve_label
+from app.vision.types import ANIMAL_CLASSES, VEHICLE_CLASSES, EvidenceLevel, TrackedObject, VisionEvent, resolve_label
 
 Point = tuple[float, float]
 
@@ -30,7 +37,21 @@ Point = tuple[float, float]
 class Zone:
     name: str
     polygon: list[Point]  # normalised (x, y) vertices
-    classes: set[str] | None = None  # None = people and vehicles
+    classes: set[str] | None = None  # None = people, vehicles and animals
+    kind: str = "zone"  # zone | restricted | infrastructure
+
+    def distance(self, p: Point) -> float:
+        """0 inside, else the distance (normalised units) to the nearest edge."""
+        if self.contains(p):
+            return 0.0
+        best = float("inf")
+        pts = self.polygon
+        for i in range(len(pts)):
+            (x1, y1), (x2, y2) = pts[i], pts[(i + 1) % len(pts)]
+            dx, dy = x2 - x1, y2 - y1
+            u = max(0.0, min(1.0, ((p[0] - x1) * dx + (p[1] - y1) * dy) / (dx * dx + dy * dy or 1e-12)))
+            best = min(best, ((x1 + u * dx - p[0]) ** 2 + (y1 + u * dy - p[1]) ** 2) ** 0.5)
+        return best
 
     def contains(self, p: Point) -> bool:
         inside = False
@@ -80,6 +101,9 @@ class EventRules:
     # events describe it as unidentified and person/vehicle rules do not fire.
     confirm_confidence: float = 0.5
     min_class_share: float = 0.6
+    animal_group_threshold: int = 5
+    approach_margin: float = 0.1  # normalised distance at which an animal is "approaching" a restricted zone
+    fast_movement: float = 0.5  # frame widths per second (anchor speed over ~1 s) that counts as unusual
 
 
 @dataclass
@@ -92,14 +116,14 @@ class SceneConfig:
     def from_dict(cls, data: dict[str, Any] | None) -> SceneConfig:
         data = data or {}
         return cls(
-            zones=[Zone(z["name"], [tuple(p) for p in z["polygon"]], set(z["classes"]) if z.get("classes") else None) for z in data.get("zones", [])],
+            zones=[Zone(z["name"], [tuple(p) for p in z["polygon"]], set(z["classes"]) if z.get("classes") else None, z.get("kind", "zone")) for z in data.get("zones", [])],
             lines=[Line(ln["name"], tuple(ln["p1"]), tuple(ln["p2"])) for ln in data.get("lines", [])],
             rules=EventRules(**data.get("rules", {})),
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "zones": [{"name": z.name, "polygon": [list(p) for p in z.polygon], "classes": sorted(z.classes) if z.classes else None} for z in self.zones],
+            "zones": [{"name": z.name, "polygon": [list(p) for p in z.polygon], "classes": sorted(z.classes) if z.classes else None, "kind": z.kind} for z in self.zones],
             "lines": [{"name": ln.name, "p1": list(ln.p1), "p2": list(ln.p2)} for ln in self.lines],
             "rules": vars(self.rules),
         }
@@ -110,6 +134,8 @@ def _group(object_class: str) -> str | None:
         return "person"
     if object_class in VEHICLE_CLASSES:
         return "vehicle"
+    if object_class in ANIMAL_CLASSES:
+        return "animal"
     return None
 
 
@@ -127,6 +153,9 @@ class _TrackState:
     loiter_reported: bool = False
     line_sides: dict[str, int] = field(default_factory=dict)
     appeared_event: VisionEvent | None = None
+    near_reported: set[str] = field(default_factory=set)  # restricted/infrastructure zones already reported
+    moves: list[tuple[float, Point]] = field(default_factory=list)  # recent (t, anchor) for speed
+    fast_reported: bool = False
     votes: Counter = field(default_factory=Counter)
     candidate: str = ""
     uncertain: bool = False
@@ -149,6 +178,7 @@ class EventEngine:
         self.rules = self.scene.rules
         self.tracks: dict[int, _TrackState] = {}
         self._crowd_event: VisionEvent | None = None
+        self._group_event: VisionEvent | None = None
 
     # -- main entry ----------------------------------------------------------
 
@@ -181,8 +211,11 @@ class EventEngine:
                 events += self._zones(state, anchor, timestamp)
                 events += self._lines(state, anchor, timestamp)
                 events += self._loitering(state, timestamp)
+                if _group(state.object_class) == "animal":
+                    events += self._animal_rules(state, anchor, timestamp)
         events += self._disappeared(timestamp)
         events += self._crowd(timestamp)
+        events += self._animal_group(timestamp)
         return events
 
     def finish(self, end_timestamp: float) -> list[VisionEvent]:
@@ -193,6 +226,8 @@ class EventEngine:
                 state.appeared_event.metadata["visible_at_end"] = True
         if self._crowd_event is not None:
             self._crowd_event.end_timestamp = end_timestamp
+        if self._group_event is not None:
+            self._group_event.end_timestamp = end_timestamp
         return []
 
     # -- rules -----------------------------------------------------------------
@@ -256,6 +291,50 @@ class EventEngine:
         state.loiter_reported = True
         seconds = t - state.first_seen
         return [self._event("loitering", state.first_seen, state, f"person #{state.track_id} has been in view for {seconds:.0f}s", rule={"name": "time_in_view", "threshold_seconds": self.rules.loiter_seconds, "measured_seconds": round(seconds, 1)})]
+
+    def _animal_rules(self, state: _TrackState, anchor: Point, t: float) -> list[VisionEvent]:
+        """Restricted areas, infrastructure and fast movement: explicit distances and speeds only."""
+        events = []
+        for zone in self.scene.zones:
+            if zone.kind not in ("restricted", "infrastructure"):
+                continue
+            distance = zone.distance(anchor)
+            inside_key, near_key = f"{zone.name}:in", f"{zone.name}:near"
+            if zone.kind == "restricted":
+                if distance == 0 and inside_key not in state.near_reported:
+                    state.near_reported.update({inside_key, near_key})
+                    events.append(self._event("animal_in_restricted_area", t, state, f"{state.display} #{state.track_id} entered restricted area '{zone.name}'", zone=zone.name, rule={"name": "restricted_entry"}))
+                elif 0 < distance <= self.rules.approach_margin and near_key not in state.near_reported:
+                    state.near_reported.add(near_key)
+                    events.append(self._event("animal_approaching_restricted_area", t, state, f"{state.display} #{state.track_id} is approaching restricted area '{zone.name}'", zone=zone.name,
+                                              rule={"name": "restricted_approach", "margin": self.rules.approach_margin, "distance": round(distance, 3)}))
+            elif distance <= self.rules.approach_margin and near_key not in state.near_reported:
+                state.near_reported.add(near_key)
+                events.append(self._event("wildlife_near_infrastructure", t, state, f"{state.display} #{state.track_id} is {'at' if distance == 0 else 'near'} '{zone.name}'", zone=zone.name,
+                                          rule={"name": "infrastructure_proximity", "margin": self.rules.approach_margin, "distance": round(distance, 3)}))
+        state.moves = [(mt, mp) for mt, mp in state.moves if t - mt <= 1.5] + [(t, anchor)]
+        first_t, first_p = state.moves[0]
+        if not state.fast_reported and t - first_t >= 0.8:
+            speed = ((anchor[0] - first_p[0]) ** 2 + (anchor[1] - first_p[1]) ** 2) ** 0.5 / (t - first_t)
+            if speed >= self.rules.fast_movement:
+                state.fast_reported = True
+                events.append(self._event("unusual_movement", first_t, state, f"{state.display} #{state.track_id} moved fast ({speed:.2f} frame widths per second)",
+                                          rule={"name": "fast_movement", "threshold": self.rules.fast_movement, "measured": round(speed, 2)}))
+        return events
+
+    def _animal_group(self, t: float) -> list[VisionEvent]:
+        animals = sum(1 for s in self.tracks.values() if s.confirmed and _group(s.object_class) == "animal" and s.last_seen == t)
+        threshold = self.rules.animal_group_threshold
+        if self._group_event is None and animals >= threshold:
+            self._group_event = VisionEvent(event_type="animal_group_detected", timestamp=t, description=f"{animals} animals in view (threshold {threshold})",
+                                            object_class="animal", metadata={"rule": {"name": "animal_group_threshold", "threshold": threshold, "count": animals}})
+            return [self._group_event]
+        if self._group_event is not None:
+            self._group_event.metadata["rule"]["max_count"] = max(animals, self._group_event.metadata["rule"].get("max_count", 0))
+            if animals < threshold - 1:
+                self._group_event.end_timestamp = t
+                self._group_event = None
+        return []
 
     def _disappeared(self, t: float) -> list[VisionEvent]:
         events = []

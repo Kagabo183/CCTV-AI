@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     # Local vision engine (detector -> tracker -> event engine). See docs/VISION_BENCHMARK.md.
     vision_enabled: bool = True
-    vision_detector: Literal["yolo", "yolo_o365", "rtdetr"] = "yolo"
+    vision_detector: Literal["yolo", "yolo_o365", "rtdetr", "wildlife"] = "yolo"
     vision_weights: str | None = None  # default per detector: yolo26s.pt / yolo26s-objv1-150.pt / rtdetr-l.pt
     # Restrict detection to these class names (comma-separated). Empty = every class the model knows.
     vision_classes: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -89,6 +89,48 @@ class Settings(BaseSettings):
     vision_tile_classes: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["person", "bicycle", "car", "motorcycle", "bus", "truck"])
     vision_weights_dir: Path = Path("./models")
     vision_artifacts_dir: Path = Path("./vision_artifacts")  # per-run box tracks for the UI overlay
+
+    # Camera platform (docs/CAMERA_PLATFORM.md)
+    # Fernet key for camera passwords; empty = derived from SECRET_KEY (set a dedicated key in production).
+    camera_credentials_key: SecretStr | None = None
+    camera_heartbeat_seconds: int = 20
+    live_ai_fps: float = 2.0  # frames per second the live AI analyses per camera
+    live_ai_enabled: bool = True
+    # Which stream the live AI reads: "auto" = the sub-stream if it is at least 720p, else the main stream
+    # (small/distant people are missed at 360p); "sub" saves decode CPU; "main" is always full resolution.
+    live_ai_stream: Literal["auto", "main", "sub"] = "auto"
+    # Tiled (SAHI-style) detection costs ~10 inferences per frame per camera: "off" runs one full-frame pass at
+    # VISION_IMAGE_SIZE, which keeps many cameras at LIVE_AI_FPS on one GPU. Recorded-video runs keep VISION_TILING.
+    live_ai_tiling: Literal["on", "off"] = "off"
+    # Media server (MediaMTX): pulls camera RTSP, serves WebRTC/HLS, records, accepts gateway pushes.
+    media_server_managed: bool = True  # start/stop MediaMTX with the backend
+    media_server_exe: Path = Path("./tools/mediamtx/mediamtx.exe")
+    media_rtsp_port: int = 8554
+    media_webrtc_port: int = 8889
+    media_webrtc_udp_port: int = 8189
+    media_hls_port: int = 8888
+    media_api_port: int = 9997
+    media_playback_port: int = 9996
+    media_backend_url: str = "http://127.0.0.1:8000"  # where MediaMTX asks us to authorise readers/publishers
+    # STUN/TURN for WebRTC across NAT, e.g. "stun:stun.l.google.com:19302,turn:user:pass@turn.example.com:3478"
+    media_ice_servers: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    recording_dir: Path = Path("./recordings")
+    recording_retention: str = "24h"  # MediaMTX duration; cameras record when their profile says so
+    gateway_enrollment_ttl_minutes: int = 60
+    # Official manufacturer APIs (optional)
+    imou_app_id: str | None = None
+    imou_app_secret: SecretStr | None = None
+
+    # Wildlife intelligence (docs/WILDLIFE_BENCHMARK.md): MegaDetector V6 finds animals, SpeciesNet names them.
+    # on = every video also gets a wildlife run; off = only when started from AI details.
+    wildlife_auto: bool = True
+    wildlife_speciesnet_model: str = "kaggle:google/speciesnet/pyTorch/v4.0.3a/1"
+    # ISO 3166-1 alpha-3 country for SpeciesNet's geofence (empty = no geofence).
+    wildlife_country: str = "RWA"
+    # "genus species" allowed in wildlife_country although SpeciesNet's geofence file does not list them there.
+    wildlife_geofence_allow: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["equus quagga", "giraffa camelopardalis", "ceratotherium simum", "diceros bicornis"])
+    # Optional second opinion for uncertain animals (YOLO trained on the African Wildlife dataset), under VISION_WEIGHTS_DIR.
+    wildlife_specialist_weights: str | None = "wildlife/african_wildlife/yolo26s/weights/best.pt"
 
     # Open-ended visual understanding (vision-language models), in fallback order: gemini, local_vlm, together
     video_understanding_providers: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["gemini", "local_vlm"])
@@ -126,17 +168,17 @@ class Settings(BaseSettings):
     ask_rate_limit_per_minute: int = 20
     store_raw_provider_responses: bool = False
 
-    @field_validator("cors_origins", "video_url_allowed_domains", "camera_private_networks", "vision_classes", "vision_tile_classes", "video_understanding_providers", mode="before")
+    @field_validator("cors_origins", "video_url_allowed_domains", "camera_private_networks", "vision_classes", "vision_tile_classes", "video_understanding_providers", "wildlife_geofence_allow", "media_ice_servers", mode="before")
     @classmethod
     def _csv(cls, value: object) -> object:
         return _split_csv(value)
 
-    @field_validator("gemini_api_key", "stt_http_api_key", "tts_http_api_key", "together_api_key", mode="before")
+    @field_validator("gemini_api_key", "stt_http_api_key", "tts_http_api_key", "together_api_key", "camera_credentials_key", "imou_app_secret", mode="before")
     @classmethod
     def _blank_secret_is_none(cls, value: object) -> object:
         return None if value in ("", None) else value
 
-    @field_validator("gemini_video_fps", "stt_http_url", "tts_http_url", "tts_voice", "vision_weights", "agent_model", "local_vlm_model", "local_vlm_reasoning", "agent_local_url", "agent_local_model", "agent_local_reasoning", mode="before")
+    @field_validator("gemini_video_fps", "stt_http_url", "tts_http_url", "tts_voice", "vision_weights", "agent_model", "local_vlm_model", "local_vlm_reasoning", "agent_local_url", "agent_local_model", "agent_local_reasoning", "imou_app_id", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         return None if value == "" else value
