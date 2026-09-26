@@ -122,6 +122,10 @@ def inline_calls(text: str, n: int = 0) -> list[ToolCall]:
                     continue
         if isinstance(obj, dict) and isinstance(obj.get("answer"), str):
             return [ToolCall("final_answer", obj, f"inline_{n}")]
+    # YAML-ish: "final_answer: <text>" or "answer: <text>\nconfidence: 0.8\nevidence: ..."
+    m = re.search(r"final_answer\s*:\s*(.+)$", text, re.DOTALL) or re.search(r"^\s*answer\s*:\s*(.+?)(?:\n\s*confidence\s*:|\Z)", text, re.DOTALL)
+    if m and m.group(1).strip():
+        return [ToolCall("final_answer", {"answer": m.group(1).strip(), "confidence": 0.5}, f"inline_{n}")]
     return []
 
 

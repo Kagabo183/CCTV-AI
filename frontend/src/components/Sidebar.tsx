@@ -17,7 +17,14 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
   rtsp: "Camera clip",
   upload: "Uploaded video",
   local: "Local file",
+  camera_rtsp: "Live camera",
+  camera_onvif: "Live camera",
+  camera_hls: "Live camera",
+  camera_vendor: "Live camera",
+  nvr_channel: "Recorder channel",
 };
+
+const LIVE_KINDS = new Set(["camera_rtsp", "camera_onvif", "camera_hls", "camera_vendor", "nvr_channel"]);
 
 type Props = {
   sources: VideoSource[];
@@ -30,7 +37,7 @@ type Props = {
 
 /** Live / network cameras first, then recordings. */
 function isCamera(s: VideoSource): boolean {
-  return s.kind === "rtsp" || Boolean(s.metadata?.is_live) || s.metadata?.delivery === "stream";
+  return LIVE_KINDS.has(s.kind) || s.kind === "rtsp" || Boolean(s.metadata?.is_live) || s.metadata?.delivery === "stream";
 }
 
 export function Sidebar({
@@ -68,7 +75,7 @@ export function Sidebar({
         )}
         {[
           { title: "Cameras", list: sources.filter(isCamera) },
-          { title: "Recordings", list: sources.filter((x) => !isCamera(x)) },
+          { title: "Recordings", list: sources.filter((x) => !isCamera(x) && x.kind !== "nvr") }, // an NVR itself is not playable: its channels are listed
         ].map((g) =>
           g.list.length === 0 ? null : (
             <div key={g.title} className="pt-2">

@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.video.sources.live import LIVE_KINDS
 from app.analyzers.base import PreparedVideo, VideoAnalyzer
 from app.core.errors import AppError, ProviderUnavailable
 from app.db.session import get_sessionmaker
@@ -82,6 +83,13 @@ class VideoSessionService:
 
             source = await self.db.get(VideoSourceRecord, session.video_source_id)
             assert source is not None
+            if self.analyzer.name == "agent" and source.kind in LIVE_KINDS:
+                # Live camera + tool-using agent: questions are answered from the live AI; a clip is only
+                # recorded if the agent decides to look (analyze_video_clip), never on every question.
+                prepared = PreparedVideo(analyzer=self.analyzer.name, ref={"live": True})
+                session.status, session.provider_ref, session.provider_ref_expires_at = "ready", prepared.ref, None
+                await self.db.commit()
+                return session, prepared
             session.status = "preparing"
             await self.db.commit()
             media = None

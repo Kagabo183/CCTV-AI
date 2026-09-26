@@ -26,9 +26,14 @@ class SourceKind(StrEnum):
     URL = "url"
     LOCAL = "local"
     UPLOAD = "upload"
-    RTSP = "rtsp"  # future
-    ONVIF = "onvif"  # future
-    NVR = "nvr"  # future
+    RTSP = "rtsp"  # a recorded clip of an RTSP stream (link import)
+    ONVIF = "onvif"  # legacy name, not used for new sources
+    NVR = "nvr"  # an NVR/DVR (its channels are nvr_channel sources)
+    CAMERA_RTSP = "camera_rtsp"  # live cameras (app/cameras)
+    CAMERA_ONVIF = "camera_onvif"
+    CAMERA_HLS = "camera_hls"
+    CAMERA_VENDOR = "camera_vendor"
+    NVR_CHANNEL = "nvr_channel"
 
 
 @dataclass(frozen=True)
@@ -45,10 +50,11 @@ class PlaybackInfo:
 
     direct  - browser loads `url` itself (public video URL)
     youtube - embed player for `url`
-    proxy   - backend streams it (local files now, HLS from RTSP later)
+    proxy   - backend streams it (local files)
+    webrtc  - live camera: `url` returns a short-lived WHEP address (and HLS fallback)
     """
 
-    type: Literal["direct", "youtube", "proxy"]
+    type: Literal["direct", "youtube", "proxy", "webrtc"]
     url: str
 
 

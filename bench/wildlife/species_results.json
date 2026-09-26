@@ -1,0 +1,1104 @@
+{
+ "detector": "MDV6-yolov10-e",
+ "table": [
+  {
+   "t": 90,
+   "truth": "lion",
+   "animals_detected": 1,
+   "yolo": "cat \u00d71",
+   "african": "elephant \u00d71, buffalo \u00d71",
+   "SpeciesNet (geofence RWA)": "lion \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    1.0
+   ],
+   "SpeciesNet (no geofence)": "lion \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    1.0
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    0.82
+   ]
+  },
+  {
+   "t": 112,
+   "truth": "elephant",
+   "animals_detected": 7,
+   "yolo": "elephant \u00d73, dog \u00d71",
+   "african": "elephant \u00d76",
+   "SpeciesNet (geofence RWA)": "mammal \u00d73; animal \u00d72; suidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.85,
+    0.92,
+    0.76,
+    0.8,
+    0.86,
+    0.66,
+    0.66
+   ],
+   "SpeciesNet (no geofence)": "mammal \u00d73; animal \u00d72; wild boar \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.79,
+    0.92,
+    0.76,
+    0.8,
+    0.86,
+    0.66,
+    0.66
+   ],
+   "Snapshot Serengeti": "other \u00d77",
+   "Snapshot Serengeti scores": [
+    0.83,
+    0.98,
+    1.0,
+    1.0,
+    0.95,
+    0.99,
+    0.86
+   ]
+  },
+  {
+   "t": 120,
+   "truth": "giraffe",
+   "animals_detected": 1,
+   "yolo": "giraffe \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.98
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0
+   ]
+  },
+  {
+   "t": 155,
+   "truth": "wildebeest/zebra",
+   "animals_detected": 8,
+   "yolo": "horse \u00d75, cow \u00d71, zebra \u00d71",
+   "african": "elephant \u00d75, zebra \u00d71",
+   "SpeciesNet (geofence RWA)": "domestic horse \u00d72; equidae family \u00d71; equus species \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.94,
+    0.81,
+    0.89,
+    0.85,
+    0.84,
+    0.88,
+    0.85,
+    0.78
+   ],
+   "SpeciesNet (no geofence)": "domestic horse \u00d72; plains zebra \u00d71; equus species \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.94,
+    0.81,
+    0.89,
+    0.85,
+    0.84,
+    0.88,
+    0.85,
+    0.78
+   ],
+   "Snapshot Serengeti": "other \u00d75; zebra \u00d72; impala \u00d71",
+   "Snapshot Serengeti scores": [
+    0.98,
+    0.74,
+    0.67,
+    0.99,
+    0.59,
+    0.87,
+    0.91,
+    0.91
+   ]
+  },
+  {
+   "t": 190,
+   "truth": "giraffe",
+   "animals_detected": 1,
+   "yolo": "giraffe \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.98
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0
+   ]
+  },
+  {
+   "t": 340,
+   "truth": "zebra",
+   "animals_detected": 8,
+   "yolo": "zebra \u00d79",
+   "african": "zebra \u00d78",
+   "SpeciesNet (geofence RWA)": "equidae family \u00d78",
+   "SpeciesNet (geofence RWA) scores": [
+    0.9,
+    0.94,
+    0.91,
+    0.93,
+    0.95,
+    0.94,
+    0.95,
+    0.95
+   ],
+   "SpeciesNet (no geofence)": "plains zebra \u00d78",
+   "SpeciesNet (no geofence) scores": [
+    0.89,
+    0.94,
+    0.77,
+    0.93,
+    0.94,
+    0.94,
+    0.95,
+    0.95
+   ],
+   "Snapshot Serengeti": "zebra \u00d78",
+   "Snapshot Serengeti scores": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.97,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "t": 420,
+   "truth": "elephant",
+   "animals_detected": 4,
+   "yolo": "elephant \u00d73",
+   "african": "elephant \u00d72",
+   "SpeciesNet (geofence RWA)": "african elephant \u00d73; no cv result \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99,
+    1.0,
+    0.96,
+    0.27
+   ],
+   "SpeciesNet (no geofence)": "african elephant \u00d73; no cv result \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.99,
+    1.0,
+    0.96,
+    0.27
+   ],
+   "Snapshot Serengeti": "other \u00d73; gazellegrants \u00d71",
+   "Snapshot Serengeti scores": [
+    0.61,
+    1.0,
+    1.0,
+    0.49
+   ]
+  },
+  {
+   "t": 530,
+   "truth": "elephant",
+   "animals_detected": 5,
+   "yolo": "elephant \u00d75",
+   "african": "elephant \u00d75",
+   "SpeciesNet (geofence RWA)": "african elephant \u00d74; animal \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.98,
+    0.98,
+    0.99,
+    0.99,
+    0.66
+   ],
+   "SpeciesNet (no geofence)": "african elephant \u00d74; animal \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.98,
+    0.98,
+    0.99,
+    0.99,
+    0.66
+   ],
+   "Snapshot Serengeti": "other \u00d74; buffalo \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.39
+   ]
+  },
+  {
+   "t": 560,
+   "truth": "elephant",
+   "animals_detected": 3,
+   "yolo": "elephant \u00d73",
+   "african": "elephant \u00d73",
+   "SpeciesNet (geofence RWA)": "african elephant \u00d73",
+   "SpeciesNet (geofence RWA) scores": [
+    0.98,
+    0.96,
+    0.96
+   ],
+   "SpeciesNet (no geofence)": "african elephant \u00d73",
+   "SpeciesNet (no geofence) scores": [
+    0.98,
+    0.96,
+    0.96
+   ],
+   "Snapshot Serengeti": "other \u00d73",
+   "Snapshot Serengeti scores": [
+    0.51,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "t": 640,
+   "truth": "elephant",
+   "animals_detected": 8,
+   "yolo": "elephant \u00d79",
+   "african": "elephant \u00d77",
+   "SpeciesNet (geofence RWA)": "african elephant \u00d78",
+   "SpeciesNet (geofence RWA) scores": [
+    0.96,
+    0.97,
+    0.98,
+    0.86,
+    0.84,
+    0.79,
+    0.85,
+    0.99
+   ],
+   "SpeciesNet (no geofence)": "african elephant \u00d78",
+   "SpeciesNet (no geofence) scores": [
+    0.96,
+    0.97,
+    0.98,
+    0.86,
+    0.84,
+    0.79,
+    0.85,
+    0.99
+   ],
+   "Snapshot Serengeti": "other \u00d75; wildebeest \u00d73",
+   "Snapshot Serengeti scores": [
+    0.99,
+    0.62,
+    0.96,
+    0.54,
+    0.9,
+    0.95,
+    0.77,
+    0.68
+   ]
+  },
+  {
+   "t": 800,
+   "truth": "giraffe",
+   "animals_detected": 1,
+   "yolo": "giraffe \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.98
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.97
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0
+   ]
+  },
+  {
+   "t": 870,
+   "truth": "giraffe",
+   "animals_detected": 1,
+   "yolo": "giraffe \u00d71",
+   "african": "zebra \u00d71",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    1.0
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    1.0
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    0.67
+   ]
+  },
+  {
+   "t": 1070,
+   "truth": "giraffe",
+   "animals_detected": 2,
+   "yolo": "giraffe \u00d71",
+   "african": "zebra \u00d71",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d72",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99,
+    0.99
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d72",
+   "SpeciesNet (no geofence) scores": [
+    0.99,
+    0.99
+   ],
+   "Snapshot Serengeti": "other \u00d72",
+   "Snapshot Serengeti scores": [
+    0.89,
+    0.97
+   ]
+  },
+  {
+   "t": 1150,
+   "truth": "rhinoceros",
+   "animals_detected": 2,
+   "yolo": "cow \u00d71",
+   "african": "rhino \u00d71",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d71; bovidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.71,
+    0.92
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d71; bovidae family \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.71,
+    0.92
+   ],
+   "Snapshot Serengeti": "buffalo \u00d71; other \u00d71",
+   "Snapshot Serengeti scores": [
+    0.56,
+    0.86
+   ]
+  },
+  {
+   "t": 1170,
+   "truth": "rhinoceros",
+   "animals_detected": 1,
+   "yolo": "bird \u00d72",
+   "african": "rhino \u00d71",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.99
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    0.78
+   ]
+  },
+  {
+   "t": 1190,
+   "truth": "cheetah/leopard",
+   "animals_detected": 1,
+   "yolo": "no animal",
+   "african": "buffalo \u00d71",
+   "SpeciesNet (geofence RWA)": "cat family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.95
+   ],
+   "SpeciesNet (no geofence)": "cheetah \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.78
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    0.87
+   ]
+  },
+  {
+   "t": 1240,
+   "truth": "rhinoceros",
+   "animals_detected": 2,
+   "yolo": "elephant \u00d72",
+   "african": "rhino \u00d72",
+   "SpeciesNet (geofence RWA)": "mammal \u00d71; hippopotamus \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.81,
+    0.67
+   ],
+   "SpeciesNet (no geofence)": "mammal \u00d71; hippopotamus \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.81,
+    0.67
+   ],
+   "Snapshot Serengeti": "other \u00d71; warthog \u00d71",
+   "Snapshot Serengeti scores": [
+    0.66,
+    1.0
+   ]
+  },
+  {
+   "t": 1440,
+   "truth": "hippopotamus",
+   "animals_detected": 1,
+   "yolo": "elephant \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "mammal \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.68
+   ],
+   "SpeciesNet (no geofence)": "mammal \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.68
+   ],
+   "Snapshot Serengeti": "buffalo \u00d71",
+   "Snapshot Serengeti scores": [
+    0.86
+   ]
+  },
+  {
+   "t": 1480,
+   "truth": "hippopotamus",
+   "animals_detected": 0,
+   "yolo": "elephant \u00d71, bird \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "\u2014",
+   "SpeciesNet (geofence RWA) scores": [],
+   "SpeciesNet (no geofence)": "\u2014",
+   "SpeciesNet (no geofence) scores": [],
+   "Snapshot Serengeti": "\u2014",
+   "Snapshot Serengeti scores": []
+  },
+  {
+   "t": 1557,
+   "truth": "hippopotamus",
+   "animals_detected": 2,
+   "yolo": "dog \u00d71, bear \u00d71",
+   "african": "rhino \u00d71",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d71; artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.94,
+    0.87
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d71; artiodactyla order \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.94,
+    0.87
+   ],
+   "Snapshot Serengeti": "other \u00d71; buffalo \u00d71",
+   "Snapshot Serengeti scores": [
+    0.78,
+    0.83
+   ]
+  },
+  {
+   "t": 1570,
+   "truth": "hippopotamus",
+   "animals_detected": 8,
+   "yolo": "elephant \u00d76, cow \u00d74",
+   "african": "rhino \u00d72, elephant \u00d71, buffalo \u00d71",
+   "SpeciesNet (geofence RWA)": "animal \u00d73; hippopotamus \u00d73; mammal \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.69,
+    0.66,
+    0.87,
+    0.67,
+    0.92,
+    0.32,
+    0.79,
+    0.91
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d73; hippopotamus \u00d73; mammal \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.69,
+    0.66,
+    0.87,
+    0.67,
+    0.92,
+    0.32,
+    0.79,
+    0.91
+   ],
+   "Snapshot Serengeti": "other \u00d73; guineafowl \u00d72; buffalo \u00d72",
+   "Snapshot Serengeti scores": [
+    0.99,
+    0.61,
+    0.47,
+    0.77,
+    0.51,
+    0.99,
+    0.64,
+    0.9
+   ]
+  },
+  {
+   "t": 1690,
+   "truth": "hippopotamus",
+   "animals_detected": 2,
+   "yolo": "no animal",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "animal \u00d71; no cv result \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.87,
+    0.8
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d71; no cv result \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.87,
+    0.8
+   ],
+   "Snapshot Serengeti": "wildebeest \u00d71; warthog \u00d71",
+   "Snapshot Serengeti scores": [
+    0.98,
+    0.42
+   ]
+  },
+  {
+   "t": 1830,
+   "truth": "buffalo",
+   "animals_detected": 8,
+   "yolo": "cow \u00d715",
+   "african": "buffalo \u00d77, elephant \u00d74",
+   "SpeciesNet (geofence RWA)": "african buffalo \u00d75; domestic cattle \u00d72; bovidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.89,
+    0.72,
+    0.67,
+    0.79,
+    0.71,
+    0.77,
+    0.99,
+    0.81
+   ],
+   "SpeciesNet (no geofence)": "african buffalo \u00d75; domestic cattle \u00d72; bovidae family \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.89,
+    0.72,
+    0.67,
+    0.79,
+    0.71,
+    0.77,
+    0.99,
+    0.81
+   ],
+   "Snapshot Serengeti": "buffalo \u00d76; other \u00d72",
+   "Snapshot Serengeti scores": [
+    0.97,
+    0.98,
+    0.87,
+    1.0,
+    0.96,
+    0.88,
+    0.74,
+    0.43
+   ]
+  },
+  {
+   "t": 1890,
+   "truth": "buffalo",
+   "animals_detected": 2,
+   "yolo": "elephant \u00d72, bear \u00d71",
+   "african": "elephant \u00d72",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d71; bovidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    1.0,
+    0.89
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d71; bovidae family \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    1.0,
+    0.89
+   ],
+   "Snapshot Serengeti": "buffalo \u00d72",
+   "Snapshot Serengeti scores": [
+    1.0,
+    0.93
+   ]
+  },
+  {
+   "t": 1950,
+   "truth": "buffalo",
+   "animals_detected": 8,
+   "yolo": "cow \u00d713",
+   "african": "buffalo \u00d711",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d74; bovidae family \u00d72; african buffalo \u00d72",
+   "SpeciesNet (geofence RWA) scores": [
+    1.0,
+    0.74,
+    0.94,
+    0.67,
+    0.97,
+    0.72,
+    0.95,
+    0.66
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d74; bovidae family \u00d72; african buffalo \u00d72",
+   "SpeciesNet (no geofence) scores": [
+    1.0,
+    0.74,
+    0.94,
+    0.67,
+    0.97,
+    0.72,
+    0.95,
+    0.66
+   ],
+   "Snapshot Serengeti": "buffalo \u00d76; gazellethomsons \u00d71; warthog \u00d71",
+   "Snapshot Serengeti scores": [
+    0.9,
+    0.35,
+    0.99,
+    0.99,
+    0.93,
+    0.76,
+    0.78,
+    0.91
+   ]
+  },
+  {
+   "t": 2070,
+   "truth": "zebra",
+   "animals_detected": 2,
+   "yolo": "zebra \u00d72",
+   "african": "zebra \u00d72",
+   "SpeciesNet (geofence RWA)": "equidae family \u00d72",
+   "SpeciesNet (geofence RWA) scores": [
+    0.98,
+    0.97
+   ],
+   "SpeciesNet (no geofence)": "plains zebra \u00d72",
+   "SpeciesNet (no geofence) scores": [
+    0.97,
+    0.97
+   ],
+   "Snapshot Serengeti": "zebra \u00d72",
+   "Snapshot Serengeti scores": [
+    0.99,
+    1.0
+   ]
+  },
+  {
+   "t": 2130,
+   "truth": "zebra",
+   "animals_detected": 8,
+   "yolo": "zebra \u00d728",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "equidae family \u00d78",
+   "SpeciesNet (geofence RWA) scores": [
+    0.91,
+    0.92,
+    0.95,
+    0.88,
+    0.91,
+    0.94,
+    0.94,
+    0.95
+   ],
+   "SpeciesNet (no geofence)": "plains zebra \u00d78",
+   "SpeciesNet (no geofence) scores": [
+    0.91,
+    0.92,
+    0.95,
+    0.88,
+    0.91,
+    0.94,
+    0.94,
+    0.95
+   ],
+   "Snapshot Serengeti": "zebra \u00d78",
+   "Snapshot Serengeti scores": [
+    0.99,
+    1.0,
+    1.0,
+    1.0,
+    0.98,
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "t": 2250,
+   "truth": "zebra",
+   "animals_detected": 2,
+   "yolo": "zebra \u00d71",
+   "african": "zebra \u00d72",
+   "SpeciesNet (geofence RWA)": "equidae family \u00d72",
+   "SpeciesNet (geofence RWA) scores": [
+    0.96,
+    0.92
+   ],
+   "SpeciesNet (no geofence)": "plains zebra \u00d72",
+   "SpeciesNet (no geofence) scores": [
+    0.96,
+    0.92
+   ],
+   "Snapshot Serengeti": "zebra \u00d72",
+   "Snapshot Serengeti scores": [
+    1.0,
+    1.0
+   ]
+  },
+  {
+   "t": 2430,
+   "truth": "wildebeest",
+   "animals_detected": 8,
+   "yolo": "cow \u00d75",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "animal \u00d74; no cv result \u00d73; bovidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.8,
+    0.62,
+    0.69,
+    0.97,
+    0.77,
+    0.77,
+    0.97,
+    0.97
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d74; no cv result \u00d73; common wildebeest \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.75,
+    0.62,
+    0.69,
+    0.97,
+    0.77,
+    0.77,
+    0.97,
+    0.97
+   ],
+   "Snapshot Serengeti": "wildebeest \u00d74; other \u00d72; guineafowl \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0,
+    0.57,
+    1.0,
+    0.98,
+    0.99,
+    0.97,
+    0.45,
+    0.96
+   ]
+  },
+  {
+   "t": 2490,
+   "truth": "wildebeest",
+   "animals_detected": 8,
+   "yolo": "cow \u00d720",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "bovidae family \u00d74; animal \u00d73; blank \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.87,
+    0.76,
+    0.79,
+    0.65,
+    0.67,
+    0.99,
+    0.6,
+    0.91
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d73; common wildebeest \u00d73; bovidae family \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.87,
+    0.74,
+    0.77,
+    0.65,
+    0.67,
+    0.99,
+    0.6,
+    0.82
+   ],
+   "Snapshot Serengeti": "wildebeest \u00d77; zebra \u00d71",
+   "Snapshot Serengeti scores": [
+    0.62,
+    0.81,
+    1.0,
+    0.85,
+    0.43,
+    0.29,
+    0.98,
+    0.65
+   ]
+  },
+  {
+   "t": 2610,
+   "truth": "wildebeest",
+   "animals_detected": 8,
+   "yolo": "cow \u00d710",
+   "african": "buffalo \u00d76",
+   "SpeciesNet (geofence RWA)": "bovidae family \u00d78",
+   "SpeciesNet (geofence RWA) scores": [
+    0.92,
+    0.97,
+    0.92,
+    0.98,
+    0.95,
+    0.81,
+    0.92,
+    0.91
+   ],
+   "SpeciesNet (no geofence)": "common wildebeest \u00d78",
+   "SpeciesNet (no geofence) scores": [
+    0.86,
+    0.97,
+    0.91,
+    0.97,
+    0.95,
+    0.79,
+    0.91,
+    0.89
+   ],
+   "Snapshot Serengeti": "wildebeest \u00d78",
+   "Snapshot Serengeti scores": [
+    1.0,
+    0.96,
+    0.82,
+    1.0,
+    0.82,
+    0.97,
+    0.93,
+    0.99
+   ]
+  },
+  {
+   "t": 2670,
+   "truth": "wildebeest",
+   "animals_detected": 8,
+   "yolo": "cow \u00d720",
+   "african": "elephant \u00d71",
+   "SpeciesNet (geofence RWA)": "animal \u00d74; no cv result \u00d72; bovidae family \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.95,
+    0.77,
+    0.87,
+    0.72,
+    0.68,
+    0.7,
+    0.58,
+    0.79
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d74; no cv result \u00d72; common wildebeest \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.91,
+    0.77,
+    0.87,
+    0.72,
+    0.68,
+    0.7,
+    0.58,
+    0.79
+   ],
+   "Snapshot Serengeti": "wildebeest \u00d75; other \u00d72; buffalo \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0,
+    0.9,
+    1.0,
+    0.58,
+    0.88,
+    0.87,
+    0.51,
+    0.33
+   ]
+  },
+  {
+   "t": 2850,
+   "truth": "elephant",
+   "animals_detected": 4,
+   "yolo": "elephant \u00d73",
+   "african": "elephant \u00d73",
+   "SpeciesNet (geofence RWA)": "african elephant \u00d73; no cv result \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.99,
+    0.99,
+    0.75,
+    0.28
+   ],
+   "SpeciesNet (no geofence)": "african elephant \u00d73; no cv result \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.99,
+    0.99,
+    0.75,
+    0.28
+   ],
+   "Snapshot Serengeti": "other \u00d73; zebra \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0,
+    1.0,
+    0.83,
+    0.94
+   ]
+  },
+  {
+   "t": 2910,
+   "truth": "giraffe",
+   "animals_detected": 1,
+   "yolo": "giraffe \u00d71",
+   "african": "no animal",
+   "SpeciesNet (geofence RWA)": "artiodactyla order \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    1.0
+   ],
+   "SpeciesNet (no geofence)": "giraffe \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    1.0
+   ],
+   "Snapshot Serengeti": "other \u00d71",
+   "Snapshot Serengeti scores": [
+    1.0
+   ]
+  },
+  {
+   "t": 2970,
+   "truth": "rhinoceros",
+   "animals_detected": 0,
+   "yolo": "cow \u00d71",
+   "african": "rhino \u00d71",
+   "SpeciesNet (geofence RWA)": "\u2014",
+   "SpeciesNet (geofence RWA) scores": [],
+   "SpeciesNet (no geofence)": "\u2014",
+   "SpeciesNet (no geofence) scores": [],
+   "Snapshot Serengeti": "\u2014",
+   "Snapshot Serengeti scores": []
+  },
+  {
+   "t": 3030,
+   "truth": "hippopotamus",
+   "animals_detected": 5,
+   "yolo": "elephant \u00d72",
+   "african": "rhino \u00d73",
+   "SpeciesNet (geofence RWA)": "animal \u00d72; hippopotamus \u00d71; mammal \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.82,
+    0.7,
+    0.59,
+    0.73,
+    0.43
+   ],
+   "SpeciesNet (no geofence)": "animal \u00d72; hippopotamus \u00d71; mammal \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.82,
+    0.7,
+    0.59,
+    0.73,
+    0.43
+   ],
+   "Snapshot Serengeti": "buffalo \u00d71; wildebeest \u00d71; impala \u00d71",
+   "Snapshot Serengeti scores": [
+    0.44,
+    0.64,
+    0.54,
+    0.95,
+    0.69
+   ]
+  },
+  {
+   "t": 3090,
+   "truth": "hippopotamus",
+   "animals_detected": 1,
+   "yolo": "elephant \u00d71",
+   "african": "buffalo \u00d71",
+   "SpeciesNet (geofence RWA)": "hippopotamus \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.85
+   ],
+   "SpeciesNet (no geofence)": "hippopotamus \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.85
+   ],
+   "Snapshot Serengeti": "guineafowl \u00d71",
+   "Snapshot Serengeti scores": [
+    0.54
+   ]
+  },
+  {
+   "t": 3150,
+   "truth": "lion/buffalo",
+   "animals_detected": 2,
+   "yolo": "dog \u00d71, cow \u00d71",
+   "african": "buffalo \u00d72, elephant \u00d71",
+   "SpeciesNet (geofence RWA)": "domestic cattle \u00d71; lion \u00d71",
+   "SpeciesNet (geofence RWA) scores": [
+    0.8,
+    0.96
+   ],
+   "SpeciesNet (no geofence)": "domestic cattle \u00d71; lion \u00d71",
+   "SpeciesNet (no geofence) scores": [
+    0.8,
+    0.96
+   ],
+   "Snapshot Serengeti": "buffalo \u00d71; wildebeest \u00d71",
+   "Snapshot Serengeti scores": [
+    0.94,
+    0.74
+   ]
+  },
+  {
+   "t": 3270,
+   "truth": "zebra",
+   "animals_detected": 8,
+   "yolo": "zebra \u00d710",
+   "african": "zebra \u00d76",
+   "SpeciesNet (geofence RWA)": "equidae family \u00d78",
+   "SpeciesNet (geofence RWA) scores": [
+    0.95,
+    0.96,
+    0.94,
+    0.97,
+    0.98,
+    0.94,
+    0.94,
+    0.94
+   ],
+   "SpeciesNet (no geofence)": "plains zebra \u00d78",
+   "SpeciesNet (no geofence) scores": [
+    0.95,
+    0.96,
+    0.94,
+    0.97,
+    0.98,
+    0.94,
+    0.94,
+    0.94
+   ],
+   "Snapshot Serengeti": "zebra \u00d78",
+   "Snapshot Serengeti scores": [
+    1.0,
+    1.0,
+    0.99,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  }
+ ],
+ "score": {
+  "YOLO26s (COCO)": {
+   "wrong": 120,
+   "correct": 83
+  },
+  "African Wildlife YOLO26s": {
+   "wrong": 33,
+   "correct": 70
+  },
+  "SpeciesNet (geofence RWA)": {
+   "correct": 35,
+   "uncertain": 92,
+   "wrong": 25
+  },
+  "SpeciesNet (no geofence)": {
+   "correct": 85,
+   "wrong": 26,
+   "uncertain": 41
+  },
+  "Snapshot Serengeti": {
+   "uncertain": 53,
+   "correct": 69,
+   "wrong": 30
+  }
+ }
+}

@@ -13,9 +13,10 @@ from app.db.base import Base, IdMixin, TimestampMixin, utcnow
 class VideoSourceRecord(IdMixin, TimestampMixin, Base):
     """A registered video source. `kind` selects the VideoSource implementation.
 
-    kind: url | local (Phase 1) and rtsp | onvif | nvr (future). For live
-    cameras `uri` will hold the stream address and credentials will move to a
-    separate secret store rather than this row.
+    kind: url | upload | local | rtsp (recorded clip) for media, and for live cameras
+    camera_rtsp | camera_onvif | camera_hls | nvr | nvr_channel | camera_vendor (see app/cameras).
+    For cameras `uri` holds the stream address WITHOUT credentials (those are encrypted in
+    camera_credentials); capabilities and stream profiles are in source_metadata.
     """
 
     __tablename__ = "video_sources"
@@ -33,6 +34,14 @@ class VideoSourceRecord(IdMixin, TimestampMixin, Base):
     # Wall-clock time of the first frame, when known: lets "saa munani" map to video time.
     recorded_start_at: Mapped[datetime | None]
     last_validated_at: Mapped[datetime | None]
+    # Camera platform: NVR channels point at their NVR; remote cameras at the gateway that reaches them.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("video_sources.id", ondelete="CASCADE"), index=True)
+    gateway_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("gateways.id", ondelete="SET NULL"), index=True)
+    # online | offline | connecting | auth_failed | stream_error | gateway_offline | disconnected (cameras only)
+    connection_state: Mapped[str | None] = mapped_column(String(20))
+    last_seen_at: Mapped[datetime | None]
+    # Which AI runs on this camera: {"general": true, "wildlife": false, "people": true, "vehicles": true, ...}
+    ai_profile: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
 
 class VideoSession(IdMixin, TimestampMixin, Base):

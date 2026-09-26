@@ -20,7 +20,7 @@ from app.services.vision import VisionService, artifact_path, local_analysis_blo
 router = APIRouter(prefix="/video-sources/{source_id}", tags=["local vision"])
 OwnedSource = Annotated[VideoSourceRecord, Depends(owned_source)]
 
-MODEL_LABELS = {"yolo": "YOLO26s", "yolo_o365": "YOLO26s-O365", "rtdetr": "RT-DETR-L", "bytetrack": "ByteTrack", "botsort": "BoT-SORT"}
+MODEL_LABELS = {"yolo": "YOLO26s", "yolo_o365": "YOLO26s-O365", "rtdetr": "RT-DETR-L", "wildlife": "MegaDetector V6", "bytetrack": "ByteTrack", "botsort": "BoT-SORT"}
 
 
 class VisionRunOut(BaseModel):
@@ -48,7 +48,7 @@ class VisionRunOut(BaseModel):
 
 
 class RunIn(BaseModel):
-    detector: Literal["yolo", "yolo_o365", "rtdetr"] | None = None
+    detector: Literal["yolo", "yolo_o365", "rtdetr", "wildlife"] | None = None
     tracker: Literal["bytetrack", "botsort"] | None = None
 
 
@@ -178,6 +178,7 @@ class TrackOut(BaseModel):
     frames: int
     class_votes: dict[str, int]
     last_bbox: list[float]
+    wildlife: dict[str, Any] | None = None  # species verdict (wildlife runs): species/candidate/certain/score/display
 
 
 class DescribeOut(BaseModel):
@@ -206,6 +207,7 @@ def _track_out(t: ObjectTrack) -> TrackOut:
         frames=t.frames,
         class_votes=m.get("class_votes", {}),
         last_bbox=m.get("last_bbox", []),
+        wildlife=m.get("wildlife"),
     )
 
 

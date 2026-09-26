@@ -29,6 +29,8 @@ VEHICLE_CLASSES = frozenset({
     "bicycle", "car", "motorcycle", "bus", "truck", "van", "suv", "pickup truck", "sports car", "machinery vehicle",
     "tricycle", "scooter", "ambulance", "fire truck", "heavy truck", "train", "boat",
 })
+# "animal" is MegaDetector's class; the rest are COCO animals (species come from the wildlife classifier)
+ANIMAL_CLASSES = {"animal", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"}
 UNKNOWN = "unknown"
 
 

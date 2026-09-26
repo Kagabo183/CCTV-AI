@@ -154,3 +154,34 @@ def test_detector_is_not_restricted_to_a_few_classes() -> None:
     assert only.info()["class_filter"] == ["person", "dog"]
     with pytest.raises(ValueError):
         build_detector("yolo", weights_dir=Path("models"), device="cpu", classes=["rabbit"])  # not a COCO class
+
+
+def test_animal_zone_restricted_and_infrastructure() -> None:
+    scene = SceneConfig(
+        zones=[
+            Zone("waterhole", [(0.0, 0.0), (0.3, 0.0), (0.3, 1.0), (0.0, 1.0)]),
+            Zone("farm", [(0.8, 0.0), (1.0, 0.0), (1.0, 1.0), (0.8, 1.0)], kind="restricted"),
+            Zone("fence", [(0.45, 0.0), (0.5, 0.0), (0.5, 1.0), (0.45, 1.0)], kind="infrastructure"),
+        ],
+        rules=EventRules(min_track_seconds=0.2, approach_margin=0.1, fast_movement=5.0),
+    )
+    engine = EventEngine(scene)
+    # an animal walks left -> right through the waterhole, past the fence, into the farm
+    frames = [(t / 10, [obj(3, 10 + t * 2, 50, t / 10, cls="animal")]) for t in range(0, 45)]
+    events = run(engine, frames)
+    got = types(events)
+    assert "animal_entered" in got and "animal_exited" in got  # waterhole in / out
+    assert "wildlife_near_infrastructure" in got
+    assert got.index("animal_approaching_restricted_area") < got.index("animal_in_restricted_area")
+    assert got.count("animal_in_restricted_area") == 1
+
+
+def test_animal_group_and_fast_movement() -> None:
+    engine = EventEngine(SceneConfig(rules=EventRules(min_track_seconds=0.2, animal_group_threshold=3, fast_movement=0.5)))
+    herd = [(t / 10, [obj(i, 10 + i * 10, 50, t / 10, cls="zebra") for i in range(4)]) for t in range(0, 10)]
+    events = run(engine, herd)
+    assert types(events).count("animal_group_detected") == 1
+    assert all(e.event_type != "unusual_movement" for e in events)  # standing still
+    runner = [(t / 10, [obj(9, 5 + t * 8, 80, t / 10, cls="animal")]) for t in range(0, 12)]  # 0.8 widths/s
+    fast = [e for e in run(EventEngine(SceneConfig(rules=EventRules(min_track_seconds=0.2, fast_movement=0.5))), runner) if e.event_type == "unusual_movement"]
+    assert len(fast) == 1 and fast[0].metadata["rule"]["measured"] >= 0.5

@@ -30,3 +30,23 @@ backend/diagnosis_output/
 backend/diagnosis_person/
 backend/coverage_output/
 backend/.video_work/
+bench/wildlife/frames/
+bench/wildlife/sheets/
+
+# Local media server binaries and simulated-camera media (footage)
+backend/tools/mediamtx/
+backend/tools/camsim/media/
+backend/recordings/
+backend/data/
+
+# gateway identity (secret) and media server certificates generated at runtime
+backend/gateway_agent/gateway*.json
+backend/auto.crt
+backend/auto.key
+backend/data/
+backend/*.db.bak*
+backend/tools/camsim/camsim.yml
+backend/*.db-wal
+backend/*.db-shm
+weights/
+*.pt

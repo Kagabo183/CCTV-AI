@@ -11,6 +11,7 @@ export const DETECTORS = [
   { id: "yolo", label: "YOLO26s · COCO, 80 classes (recommended)" },
   { id: "yolo_o365", label: "YOLO26s · Objects365, 365 classes" },
   { id: "rtdetr", label: "RT-DETR-L · COCO, 80 classes" },
+  { id: "wildlife", label: "MegaDetector V6 + SpeciesNet · wildlife" },
 ];
 export const TRACKERS = [
   { id: "bytetrack", label: "ByteTrack (recommended)" },

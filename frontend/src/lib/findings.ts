@@ -140,3 +140,70 @@ export function suggestedQuestions(f: Findings | null, lang: string): string[] {
   if (f?.uncertain) qs.push(rw ? "Ni ibihe bintu bitamenyekanye neza?" : "What objects could the AI not identify?");
   return qs.slice(0, 4);
 }
+
+export type SpeciesGroup = {
+  key: string; // species name, or "unknown"
+  label: string; // "hippopotamus", "Unknown animals"
+  certain: boolean;
+  animals: number; // separate tracks
+  atOnce: number; // most visible in one frame
+  peakAt: number | null;
+  first: number;
+  last: number;
+  trackIds: number[];
+  meanScore: number;
+  candidates: string[]; // for uncertain animals: the best guesses
+};
+
+/** Wildlife run -> species list. Uncertain animals are grouped, never forced into a species. */
+export function wildlifeGroups(boxes: BoxTrack | null, tracks: Track[]): SpeciesGroup[] {
+  const groups = new Map<string, SpeciesGroup>();
+  for (const t of tracks) {
+    const w = t.wildlife;
+    if (!w) continue;
+    const key = w.certain && w.species ? w.species : "unknown";
+    const g =
+      groups.get(key) ??
+      { key, label: key === "unknown" ? "Unknown animals" : key, certain: key !== "unknown", animals: 0, atOnce: 0, peakAt: null, first: t.first_seen, last: t.last_seen, trackIds: [], meanScore: 0, candidates: [] };
+    g.animals += 1;
+    g.first = Math.min(g.first, t.first_seen);
+    g.last = Math.max(g.last, t.last_seen);
+    g.trackIds.push(t.track_id);
+    g.meanScore += w.score;
+    if (!w.certain && w.candidate && !g.candidates.includes(w.candidate)) g.candidates.push(w.candidate);
+    groups.set(key, g);
+  }
+  if (boxes) {
+    const confirm = boxes.confirm_confidence ?? 0.5;
+    const trackKey = new Map<number, string>();
+    for (const [key, g] of groups) for (const id of g.trackIds) trackKey.set(id, key);
+    for (const f of boxes.frames) {
+      const counts = new Map<string, number>();
+      for (const o of f.o) {
+        const key = trackKey.get(o[0]);
+        if (key && o[2] >= confirm) counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      for (const [key, n] of counts) {
+        const g = groups.get(key)!;
+        if (n > g.atOnce) {
+          g.atOnce = n;
+          g.peakAt = f.t;
+        }
+      }
+    }
+  }
+  const list = [...groups.values()].map((g) => ({ ...g, meanScore: g.animals ? g.meanScore / g.animals : 0, atOnce: g.atOnce || 1 }));
+  return list.sort((a, b) => (a.key === "unknown" ? 1 : b.key === "unknown" ? -1 : b.atOnce - a.atOnce || b.animals - a.animals));
+}
+
+/** How a wildlife track is named on the video and in lists. */
+export function wildlifeLabel(t: Track): string {
+  const w = t.wildlife;
+  if (!w) return t.object_class;
+  if (w.certain && w.species) return w.species;
+  return w.candidate ? `possible ${w.candidate}` : "animal";
+}
+
+export function titleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
