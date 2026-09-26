@@ -27,7 +27,7 @@ from app.vision import frame_source
 from app.vision.detectors import ObjectDetector
 from app.vision.events import EventEngine, SceneConfig
 from app.vision.trackers import ObjectTracker
-from app.vision.types import UNKNOWN, TrackedObject, VisionEvent, resolve_label
+from app.vision.types import ANIMAL_CLASSES, UNKNOWN, TrackedObject, VisionEvent, resolve_label
 
 
 @dataclass
@@ -41,6 +41,7 @@ class TrackSummary:
     max_confidence: float = 0.0
     first_bbox: tuple[float, ...] = ()
     last_bbox: tuple[float, ...] = ()
+    wildlife: dict | None = None  # species verdict for animal tracks (wildlife runs)
 
     @property
     def object_class(self) -> str:
@@ -103,6 +104,7 @@ class VisionPipeline:
         annotate_to: Path | None = None,
         progress: Callable[[float], None] | None = None,
         max_seconds: float | None = None,
+        crop_collector: Any | None = None,
     ) -> VisionRunResult:
         import psutil
 
@@ -169,6 +171,10 @@ class VisionPipeline:
                     det_by_class[d.class_name].append(d.confidence)
 
                 events += engine.process(tracked, timestamp, (height, width))
+                if crop_collector is not None:
+                    for o in tracked:
+                        if o.class_name in ANIMAL_CLASSES:
+                            crop_collector.offer(o.track_id, timestamp, frame, o.bbox, o.confidence)
                 frames.append({"t": round(timestamp, 3), "o": [[o.track_id, o.class_name, round(o.confidence, 2), *(round(v, 1) for v in o.bbox)] for o in tracked]})
                 _summarise(tracks, tracked)
                 labels = Counter(o.class_name if o.confidence >= confirm else UNKNOWN for o in tracked)

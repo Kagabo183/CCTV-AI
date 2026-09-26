@@ -1,0 +1,298 @@
+{
+ "detector": "MDV6-yolov10-e",
+ "rows": [
+  {
+   "t": 90,
+   "truth": "lion",
+   "SpeciesNet, no geofence": "lion \u00d71",
+   "SpeciesNet, RWA + allow-list": "lion \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "lion \u00d71"
+  },
+  {
+   "t": 112,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d74; possible african elephant \u00d72; wild boar \u00d71",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d74; possible african elephant \u00d72; possible wild boar \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible elephant \u00d73; possible african elephant \u00d72; possible wild boar \u00d71"
+  },
+  {
+   "t": 120,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d71"
+  },
+  {
+   "t": 155,
+   "truth": "wildebeest/zebra",
+   "SpeciesNet, no geofence": "possible domestic horse \u00d72; plains zebra \u00d71; possible plains zebra \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic horse \u00d72; plains zebra \u00d71; possible plains zebra \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d72; plains zebra \u00d71; possible plains zebra \u00d71"
+  },
+  {
+   "t": 190,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d71"
+  },
+  {
+   "t": 340,
+   "truth": "zebra",
+   "SpeciesNet, no geofence": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list + specialist": "plains zebra \u00d78"
+  },
+  {
+   "t": 420,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "african elephant \u00d73; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list": "african elephant \u00d73; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "african elephant \u00d73; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 530,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "african elephant \u00d74; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list": "african elephant \u00d74; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "african elephant \u00d74; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 560,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "african elephant \u00d73",
+   "SpeciesNet, RWA + allow-list": "african elephant \u00d73",
+   "SpeciesNet, RWA + allow-list + specialist": "african elephant \u00d73"
+  },
+  {
+   "t": 640,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "african elephant \u00d78",
+   "SpeciesNet, RWA + allow-list": "african elephant \u00d78",
+   "SpeciesNet, RWA + allow-list + specialist": "african elephant \u00d78"
+  },
+  {
+   "t": 800,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d71"
+  },
+  {
+   "t": 870,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d71"
+  },
+  {
+   "t": 1070,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d72",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d72",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d72"
+  },
+  {
+   "t": 1150,
+   "truth": "rhinoceros",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d71; possible common eland \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d71; possible common eland \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible rhinoceros \u00d71; possible common eland \u00d71"
+  },
+  {
+   "t": 1170,
+   "truth": "rhinoceros",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible rhinoceros \u00d71"
+  },
+  {
+   "t": 1190,
+   "truth": "cheetah/leopard",
+   "SpeciesNet, no geofence": "cheetah \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible cheetah \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible cheetah \u00d71"
+  },
+  {
+   "t": 1240,
+   "truth": "rhinoceros",
+   "SpeciesNet, no geofence": "possible black rhinoceros \u00d71; hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible black rhinoceros \u00d71; hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible black rhinoceros \u00d71; hippopotamus \u00d71"
+  },
+  {
+   "t": 1440,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "possible hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible hippopotamus \u00d71"
+  },
+  {
+   "t": 1480,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "no animal detected",
+   "SpeciesNet, RWA + allow-list": "no animal detected",
+   "SpeciesNet, RWA + allow-list + specialist": "no animal detected"
+  },
+  {
+   "t": 1557,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d71; possible hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d71; possible hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible rhinoceros \u00d71; possible hippopotamus \u00d71"
+  },
+  {
+   "t": 1570,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d73; hippopotamus \u00d73; possible lowland tapir \u00d71",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d73; hippopotamus \u00d73; possible lowland tapir \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "hippopotamus \u00d73; animal (species uncertain) \u00d72; possible rhinoceros \u00d71"
+  },
+  {
+   "t": 1690,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d72",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d72",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d71; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 1830,
+   "truth": "buffalo",
+   "SpeciesNet, no geofence": "african buffalo \u00d75; possible domestic cattle \u00d72; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list": "african buffalo \u00d75; possible domestic cattle \u00d72; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "african buffalo \u00d75; possible bovidae family \u00d71; possible domestic cattle \u00d71"
+  },
+  {
+   "t": 1890,
+   "truth": "buffalo",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d71; possible african buffalo \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d71; possible african buffalo \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d71; possible african buffalo \u00d71"
+  },
+  {
+   "t": 1950,
+   "truth": "buffalo",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d74; african buffalo \u00d72; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d74; african buffalo \u00d72; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d75; african buffalo \u00d72; possible african buffalo \u00d71"
+  },
+  {
+   "t": 2070,
+   "truth": "zebra",
+   "SpeciesNet, no geofence": "plains zebra \u00d72",
+   "SpeciesNet, RWA + allow-list": "plains zebra \u00d72",
+   "SpeciesNet, RWA + allow-list + specialist": "plains zebra \u00d72"
+  },
+  {
+   "t": 2130,
+   "truth": "zebra",
+   "SpeciesNet, no geofence": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list + specialist": "plains zebra \u00d78"
+  },
+  {
+   "t": 2250,
+   "truth": "zebra",
+   "SpeciesNet, no geofence": "plains zebra \u00d72",
+   "SpeciesNet, RWA + allow-list": "plains zebra \u00d72",
+   "SpeciesNet, RWA + allow-list + specialist": "plains zebra \u00d72"
+  },
+  {
+   "t": 2430,
+   "truth": "wildebeest",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d76; common wildebeest \u00d71; possible common wildebeest \u00d71",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d76; possible common wildebeest \u00d72",
+   "SpeciesNet, RWA + allow-list + specialist": "animal (species uncertain) \u00d74; possible common wildebeest \u00d72; possible buffalo \u00d71"
+  },
+  {
+   "t": 2490,
+   "truth": "wildebeest",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d74; common wildebeest \u00d73; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d74; possible common wildebeest \u00d73; possible bovidae family \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d74; possible common wildebeest \u00d73; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 2610,
+   "truth": "wildebeest",
+   "SpeciesNet, no geofence": "common wildebeest \u00d78",
+   "SpeciesNet, RWA + allow-list": "possible common wildebeest \u00d78",
+   "SpeciesNet, RWA + allow-list + specialist": "possible common wildebeest \u00d78"
+  },
+  {
+   "t": 2670,
+   "truth": "wildebeest",
+   "SpeciesNet, no geofence": "animal (species uncertain) \u00d77; common wildebeest \u00d71",
+   "SpeciesNet, RWA + allow-list": "animal (species uncertain) \u00d77; possible common wildebeest \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d76; possible common wildebeest \u00d71; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 2850,
+   "truth": "elephant",
+   "SpeciesNet, no geofence": "african elephant \u00d73; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list": "african elephant \u00d73; animal (species uncertain) \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "african elephant \u00d73; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 2910,
+   "truth": "giraffe",
+   "SpeciesNet, no geofence": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list": "giraffe \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "giraffe \u00d71"
+  },
+  {
+   "t": 2970,
+   "truth": "rhinoceros",
+   "SpeciesNet, no geofence": "no animal detected",
+   "SpeciesNet, RWA + allow-list": "no animal detected",
+   "SpeciesNet, RWA + allow-list + specialist": "no animal detected"
+  },
+  {
+   "t": 3030,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "possible hippopotamus \u00d72; animal (species uncertain) \u00d72; hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible hippopotamus \u00d72; animal (species uncertain) \u00d72; hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible hippopotamus \u00d72; hippopotamus \u00d71; animal (species uncertain) \u00d71"
+  },
+  {
+   "t": 3090,
+   "truth": "hippopotamus",
+   "SpeciesNet, no geofence": "hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list": "hippopotamus \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "hippopotamus \u00d71"
+  },
+  {
+   "t": 3150,
+   "truth": "lion/buffalo",
+   "SpeciesNet, no geofence": "possible domestic cattle \u00d71; lion \u00d71",
+   "SpeciesNet, RWA + allow-list": "possible domestic cattle \u00d71; lion \u00d71",
+   "SpeciesNet, RWA + allow-list + specialist": "possible buffalo \u00d71; lion \u00d71"
+  },
+  {
+   "t": 3270,
+   "truth": "zebra",
+   "SpeciesNet, no geofence": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list": "plains zebra \u00d78",
+   "SpeciesNet, RWA + allow-list + specialist": "plains zebra \u00d78"
+  }
+ ],
+ "scores": {
+  "SpeciesNet, no geofence": {
+   "correct": 85,
+   "wrong": 2,
+   "uncertain": 52,
+   "uncertain, guess right": 13
+  },
+  "SpeciesNet, RWA + allow-list": {
+   "correct": 71,
+   "uncertain": 53,
+   "uncertain, guess right": 27,
+   "wrong": 1
+  },
+  "SpeciesNet, RWA + allow-list + specialist": {
+   "correct": 71,
+   "uncertain": 40,
+   "uncertain, guess right": 40,
+   "wrong": 1
+  }
+ }
+}

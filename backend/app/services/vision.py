@@ -50,6 +50,12 @@ def sample_fps_for(settings: Settings, duration: float | None) -> float:
 _tasks: set[asyncio.Task[None]] = set()
 
 
+def wildlife_available(settings: Settings | None = None) -> bool:
+    """MegaDetector weights present and SpeciesNet installed."""
+    settings = settings or get_settings()
+    return (settings.vision_weights_dir / DEFAULT_WEIGHTS_WILDLIFE).exists() and importlib.util.find_spec("speciesnet") is not None
+
+
 def vision_available(settings: Settings | None = None) -> bool:
     settings = settings or get_settings()
     return settings.vision_enabled and importlib.util.find_spec("ultralytics") is not None
@@ -120,6 +126,8 @@ def run_progress(run: VisionRun) -> float:
 
 from app.vision.detectors import DEFAULT_WEIGHTS  # noqa: E402
 
+DEFAULT_WEIGHTS_WILDLIFE = DEFAULT_WEIGHTS["wildlife"]
+
 DETECTORS = tuple(DEFAULT_WEIGHTS)
 TRACKERS = ("bytetrack", "botsort")
 
@@ -135,6 +143,8 @@ def local_analysis_blocker(source: VideoSourceRecord) -> str | None:
     """Why local vision cannot run on this source, or None if it can."""
     if source.status == "importing":
         return "The video is still being imported."
+    if source.kind in ("camera_rtsp", "camera_onvif", "camera_hls", "camera_vendor", "nvr_channel", "nvr"):
+        return "Live cameras are analysed continuously by the live AI, not by recorded-video runs."
     return None
 
 
@@ -216,9 +226,13 @@ class VisionService:
         if not vision_available(self.settings) or local_analysis_blocker(source) is not None:
             return None
         latest = await self.latest_run(source.id)
-        if latest is not None and latest.status in ("queued", "running", "completed"):
-            return latest
-        return await self.start(source)
+        if latest is None or latest.status not in ("queued", "running", "completed"):
+            latest = await self.start(source)
+        if self.settings.wildlife_auto and self.settings.vision_detector != "wildlife" and wildlife_available(self.settings):
+            wild = await self.latest_run(source.id, "wildlife")
+            if wild is None or wild.status not in ("queued", "running", "completed"):
+                await self.start(source, "wildlife")
+        return latest
 
 
 async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
@@ -268,6 +282,11 @@ async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
             if "confirm_confidence" not in (source.scene_config or {}).get("rules", {}):
                 scene.rules.confirm_confidence = settings.vision_confirm_confidence
             fps = sample_fps_for(settings, source.source_metadata.get("duration_seconds"))
+            collector = None
+            if run.detector == "wildlife":
+                from app.wildlife.service import CropCollector
+
+                collector = CropCollector()
             pipeline = VisionPipeline(
                 detector,
                 build_tracker(run.tracker, processing_fps=fps),
@@ -279,7 +298,13 @@ async def _execute(run_id: uuid.UUID, gateway: VideoGateway) -> None:
                     raise RunCancelled
                 _progress[run_id] = p
 
-            result = await asyncio.to_thread(pipeline.run, target, progress=on_progress, max_seconds=settings.video_import_max_seconds)
+            result = await asyncio.to_thread(pipeline.run, target, progress=on_progress, max_seconds=settings.video_import_max_seconds, crop_collector=collector)
+            if collector is not None:
+                from app.wildlife.service import apply_species, get_identifier
+
+                _progress[run_id] = 0.999
+                verdicts = await asyncio.to_thread(apply_species, result, collector, await asyncio.to_thread(get_identifier), scene.rules.confirm_confidence)
+                logger.info("Wildlife run %s: %d animal tracks classified", run_id, len(verdicts))
             await _persist(db, run, source, result)
             logger.info("Vision run %s: %s tracks, %s events", run_id, len(result.tracks), len(result.events))
         except RunCancelled:
@@ -314,6 +339,10 @@ async def _persist(db: AsyncSession, run: VisionRun, source: VideoSourceRecord, 
     confirm = result.stats.get("confirm_confidence", 0.5)
     for t in result.tracks.values():
         label, candidate, uncertain = t.resolved(confirm, 0.6)
+        wildlife = getattr(t, "wildlife", None)
+        if wildlife is not None:  # species decided by the wildlife classifier, not by the detector's confidence
+            label = wildlife["species"] if wildlife["certain"] else "animal"
+            candidate, uncertain = wildlife.get("candidate") or label, not wildlife["certain"]
         db.add(
             ObjectTrack(
                 vision_run_id=run.id,
@@ -332,6 +361,7 @@ async def _persist(db: AsyncSession, run: VisionRun, source: VideoSourceRecord, 
                     "requires_vlm": uncertain,
                     "first_bbox": [round(v, 1) for v in t.first_bbox],
                     "last_bbox": [round(v, 1) for v in t.last_bbox],
+                    **({"wildlife": wildlife} if wildlife is not None else {}),
                 },
             )
         )

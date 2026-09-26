@@ -19,7 +19,7 @@ from typing import Any
 from app.core.config import Settings
 from app.core.errors import NotSupportedYet, ValidationFailed
 from app.video.sources.base import MediaHandle, SourceKind, TimeWindow, VideoSource
-from app.video.sources.live import NvrChannelSource, OnvifCameraSource, RtspCameraSource
+from app.video.sources.live import CAMERA_KINDS, CameraLiveSource
 from app.video.sources.local_source import LocalFileVideoSource
 from app.video.sources.upload_source import StoredVideoSource, UploadedVideoSource
 from app.video.sources.url_source import UrlVideoSource
@@ -76,9 +76,10 @@ class VideoGateway:
             if not self.settings.enable_local_video_sources:
                 raise ValidationFailed("Local video files are disabled on this server")
             return LocalFileVideoSource(source_id, uri, metadata, root=self.settings.local_video_dir)
-        live = {SourceKind.RTSP: RtspCameraSource, SourceKind.ONVIF: OnvifCameraSource, SourceKind.NVR: NvrChannelSource}
-        if source_kind in live:
-            raise NotSupportedYet(f"{source_kind.value.upper()} cameras are not supported yet. Phase 1 supports video URLs.")
+        if source_kind.value in CAMERA_KINDS:
+            return CameraLiveSource(source_kind, source_id, uri, metadata)
+        if source_kind is SourceKind.ONVIF:
+            raise NotSupportedYet("Add ONVIF cameras from Cameras > Add camera.")
         raise ValidationFailed(f"Unsupported source type: {kind}")
 
     async def validate(self, source: VideoSource) -> dict[str, Any]:

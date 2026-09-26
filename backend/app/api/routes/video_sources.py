@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.analyzers.base import PreparedVideo
 from app.api.deps import Analyzer, CurrentUser, DbSession, Gateway, owned_source
+from app.cameras.credentials import redact
 from app.core.config import get_settings
 from app.core.errors import AppError, NotFoundError, ValidationFailed
 from app.models import VideoEvent, VideoSession, VideoSourceRecord, VisionRun
@@ -41,7 +42,7 @@ def serialize_source(source: VideoSourceRecord, gw: VideoGateway) -> VideoSource
         name=source.name,
         location=source.location,
         kind=source.kind,
-        uri=source.uri,
+        uri=redact(source.uri),
         status=source.status,
         status_message=source.status_message,
         metadata=source.source_metadata,
@@ -219,7 +220,7 @@ async def revalidate_source(source: OwnedSource, db: DbSession, gw: Gateway) -> 
 
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_source(source: OwnedSource, db: DbSession, gw: Gateway, analyzer: Analyzer) -> None:
+async def delete_source(source: OwnedSource, user: CurrentUser, db: DbSession, gw: Gateway, analyzer: Analyzer) -> None:
     if source.status == "importing":
         cancel_import(source.id)  # stop the download; its partial files are removed by the import itself
     active = await db.execute(select(VisionRun.id).where(VisionRun.video_source_id == source.id, VisionRun.status.in_(("queued", "running"))))
@@ -233,6 +234,10 @@ async def delete_source(source: OwnedSource, db: DbSession, gw: Gateway, analyze
         built = gw.build(source.kind, source.uri, source_id=source.id, metadata=source.source_metadata)
     except AppError:
         built = None
+    from app.cameras import service as cameras
+
+    if cameras.is_camera(source):
+        await cameras.remove_camera(db, user, source)  # media paths, live AI, health; the rows cascade
     await db.delete(source)
     await db.commit()
     if isinstance(built, StoredVideoSource):

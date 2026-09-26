@@ -36,6 +36,8 @@ async def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
 
     monkeypatch.setattr(get_settings(), "upload_dir", tmp_path / "uploads")
     monkeypatch.setattr(get_settings(), "vision_artifacts_dir", tmp_path / "vision_artifacts")
+    import app.models  # noqa: F401 - registers every table on Base.metadata, even when a test file never imports them
+
     eng = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
