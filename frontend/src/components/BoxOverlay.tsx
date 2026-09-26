@@ -39,6 +39,8 @@ export function BoxOverlay({
   label,
   highlightTrack = null,
   technical = false,
+  only = null,
+  labels = null,
 }: {
   clock: () => number | null;
   boxes: BoxTrack;
@@ -46,6 +48,10 @@ export function BoxOverlay({
   highlightTrack?: number | null;
   /** AI details on: track ids, confidence and the model name. Off: plain labels only. */
   technical?: boolean;
+  /** Draw only these track ids (e.g. one species). */
+  only?: Set<number> | null;
+  /** Display names per track id (e.g. "possible hippopotamus"). */
+  labels?: Record<number, string> | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -80,8 +86,10 @@ export function BoxOverlay({
       if (i < 0 || now - boxes.frames[i].t > maxGap) return;
       ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
       ctx.lineWidth = 2;
-      for (const [id, cls, conf, x1, y1, x2, y2] of boxes.frames[i].o) {
-        const uncertain = conf < confirm;
+      for (const [id, rawCls, conf, x1, y1, x2, y2] of boxes.frames[i].o) {
+        if (only && !only.has(id)) continue;
+        const cls = labels?.[id] ?? rawCls;
+        const uncertain = conf < confirm || cls.startsWith("possible") || cls === "animal"; // weak box, or species not confirmed
         const highlighted = highlightTrack === id;
         const color = uncertain ? "#9aa3b2" : (COLORS[cls] ?? "#e0e0e0");
         const x = ox + x1 * scale;
@@ -95,7 +103,7 @@ export function BoxOverlay({
         ctx.setLineDash([]);
         ctx.lineWidth = 2;
         // Never state a weak guess as fact: "? person 0.41"
-        const text = technical ? `#${id} ${uncertain ? "? " : ""}${cls} ${conf.toFixed(2)}` : uncertain ? "?" : cls;
+        const text = technical ? `#${id} ${uncertain ? "? " : ""}${cls} ${conf.toFixed(2)}` : cls.startsWith("possible") ? `${cls}?` : uncertain ? "?" : cls;
         const tw = ctx.measureText(text).width + 8;
         const ty = y > 16 ? y - 16 : y;
         ctx.fillStyle = color;
@@ -106,7 +114,7 @@ export function BoxOverlay({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [boxes, clock, highlightTrack, technical]);
+  }, [boxes, clock, highlightTrack, technical, only, labels]);
 
   return (
     <>

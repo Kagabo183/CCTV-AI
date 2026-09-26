@@ -26,12 +26,15 @@ from app.vision.types import Detection
 
 inference_log = logging.getLogger("app.vision.inference")
 
-DEFAULT_WEIGHTS = {"yolo": "yolo26s.pt", "yolo_o365": "yolo26s-objv1-150.pt", "rtdetr": "rtdetr-l.pt"}
+DEFAULT_WEIGHTS = {"yolo": "yolo26s.pt", "yolo_o365": "yolo26s-objv1-150.pt", "rtdetr": "rtdetr-l.pt", "wildlife": "wildlife/MDV6-yolov10-e-1280.pt"}
 MODEL_CARDS = {
     "yolo": {"label": "YOLO26s", "architecture": "YOLO26s", "dataset": "COCO"},
     "yolo_o365": {"label": "YOLO26s-O365", "architecture": "YOLO26s", "dataset": "Objects365"},
     "rtdetr": {"label": "RT-DETR-L", "architecture": "RT-DETR-L", "dataset": "COCO"},
+    "wildlife": {"label": "MegaDetector V6", "architecture": "YOLOv10-e", "dataset": "MegaDetector (animal / person / vehicle) + SpeciesNet"},
 }
+# The wildlife detector runs as benchmarked: full frame at 1280, no tiling.
+DETECTOR_OVERRIDES: dict[str, dict[str, object]] = {"wildlife": {"image_size": 1280, "tiling": None}}
 
 
 @dataclass(frozen=True)
@@ -141,7 +144,7 @@ class _UltralyticsDetector(ObjectDetector):
     ) -> None:
         weights_dir.mkdir(parents=True, exist_ok=True)
         path = Path(weights)
-        if not path.is_absolute() and path.parent == Path("."):
+        if not path.is_absolute():
             path = weights_dir / path  # Ultralytics downloads known assets to this path
         self.name = name
         self.weights = path.name
@@ -209,6 +212,12 @@ class _UltralyticsDetector(ObjectDetector):
             inference_log.debug("%s -> %s", self.weights, [(d.class_id, d.class_name, round(d.confidence, 3)) for d in detections])
         return detections
 
+    def detect_batch(self, frames: list[np.ndarray]) -> list[list[Detection]]:
+        """Several frames (e.g. from different live cameras) in one GPU call. Tiled detection stays per frame."""
+        if self.tiling is not None or len(frames) == 1:
+            return [self.detect(f) for f in frames]
+        return [self._to_detections(r) for r in self._predict(frames, self.image_size)]
+
 
 class YOLODetector(_UltralyticsDetector):
     @staticmethod
@@ -227,7 +236,8 @@ class RTDETRDetector(_UltralyticsDetector):
 
 
 def build_detector(name: str, weights: str | None = None, **kwargs: Any) -> ObjectDetector:
-    classes = {"yolo": YOLODetector, "yolo_o365": YOLODetector, "rtdetr": RTDETRDetector}
+    classes = {"yolo": YOLODetector, "yolo_o365": YOLODetector, "rtdetr": RTDETRDetector, "wildlife": YOLODetector}
+    kwargs = {**kwargs, **DETECTOR_OVERRIDES.get(name, {})}
     if name not in classes:
         raise ValueError(f"Unknown detector {name!r}; expected one of {sorted(classes)}")
     return classes[name](name, weights or DEFAULT_WEIGHTS[name], **kwargs)

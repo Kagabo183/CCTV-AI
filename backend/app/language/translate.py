@@ -90,9 +90,17 @@ class NLLBTranslator(Translator):
         key = (text, source, target)
         if key in self._cache:
             return self._cache[key]
-        sentences = split_sentences(text) or [text]
+        from app.language import glossary
+
+        slots: dict[str, str] = {}
+        source_text = text
+        if source == "rw":
+            source_text = glossary.rw_terms_to_english(text)  # NLLB guesses animal names wrongly
+        elif target == "rw":
+            source_text, slots = glossary.protect_english(text)  # animal names and video times survive as placeholders
+        sentences = split_sentences(source_text) or [source_text]
         translated = await asyncio.to_thread(self._translate_sync, sentences, src, tgt)
-        result = " ".join(t.strip() for t in translated)
+        result = glossary.restore(" ".join(t.strip() for t in translated), slots)
         if len(self._cache) > 2000:
             self._cache.clear()
         self._cache[key] = result

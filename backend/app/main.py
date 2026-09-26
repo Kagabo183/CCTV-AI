@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, conversations, system, video_sources, vision, voice
+from app.api.routes import auth, cameras, conversations, system, video_sources, vision, voice
 from app.core.cache import close_cache
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -41,7 +41,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         stt = get_stt()
         warmup = asyncio.create_task(asyncio.to_thread(stt._load))  # type: ignore[attr-defined]
+    from app.cameras import live, media_server
+    from app.cameras import service as cameras
+
+    if settings.media_server_managed:
+        try:
+            media_server.start(settings)
+            await media_server.wait_api()
+        except Exception:  # noqa: BLE001 - uploaded/linked videos keep working without live cameras
+            logger.exception("Media server did not start: live cameras are unavailable")
+    restored = await cameras.restore_all()
+    if restored:
+        logger.info("Restored %d live cameras", restored)
+    cameras.start_monitor()
     yield
+    cameras.stop_monitor()
+    live.stop_all()
+    from app.cameras import device_events
+
+    device_events.stop_all()
+    if settings.media_server_managed:
+        media_server.stop()
     if warmup is not None and not warmup.done():
         warmup.cancel()
     await close_cache()
@@ -81,7 +101,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, "code": exc.code})
 
     api = APIRouter(prefix="/api")
-    for module in (system, auth, video_sources, vision, conversations, voice):
+    for module in (system, auth, video_sources, vision, conversations, voice, cameras):
         api.include_router(module.router)
     app.include_router(api)
     return app

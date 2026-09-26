@@ -2,17 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, formatTime, playBase64Audio } from "@/lib/api";
-import { computeFindings, ROUTINE_EVENTS, suggestedQuestions } from "@/lib/findings";
+import { computeFindings, ROUTINE_EVENTS, suggestedQuestions, wildlifeGroups, wildlifeLabel } from "@/lib/findings";
 import type { Audio, AskResponse, BoxTrack, Conversation, Message, PublicConfig, Track, User, VideoEvent, VideoSession, VideoSource, VisionRun } from "@/lib/types";
 import { AiDetails } from "./AiDetails";
 import { ChatPanel, type PendingState } from "./ChatPanel";
 import { Insights } from "./Insights";
+import { LiveInsights } from "./cameras/LiveInsights";
 import { MicIcon, XIcon } from "./icons";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { WildlifePanel } from "./WildlifePanel";
 import { SessionPill, VideoStage, type VideoStageHandle } from "./VideoStage";
 
 const LAST_SOURCE_KEY = "visionary:last-source";
+const LIVE_SOURCE_KINDS = new Set(["camera_rtsp", "camera_onvif", "camera_hls", "camera_vendor", "nvr_channel"]);
 const AI_DETAILS_KEY = "visionary:ai-details";
 
 function tempMessage(content: string, input_mode: "text" | "voice", sourceId: string): Message {
@@ -56,6 +59,8 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
   const [events, setEvents] = useState<VideoEvent[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
+  const [wildlifeTracks, setWildlifeTracks] = useState<Track[]>([]);
+  const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   // "AI details" (developer view) is remembered per browser. The workspace only renders client-side, after sign-in.
   const [aiDetails, setAiDetailsState] = useState(() => {
@@ -91,6 +96,8 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
     setSelectedRunId(null);
     setEvents([]);
     setSelectedTrackId(null);
+    setWildlifeTracks([]);
+    setSelectedSpecies(null);
     setCurrentTime(0);
     try {
       localStorage.setItem(LAST_SOURCE_KEY, s.id);
@@ -179,7 +186,10 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
   }, [source, runsBusy]);
 
   // Default selection: the assistant's (primary) run, else the first completed one.
-  const completedRuns = runs.filter((r) => r.status === "completed" && r.id);
+  // The wildlife run has its own panel; it is only the default when it is the only run.
+  const wildlifeRun = runs.find((r) => r.detector === "wildlife" && r.id) ?? null;
+  const allCompleted = runs.filter((r) => r.status === "completed" && r.id);
+  const completedRuns = allCompleted.some((r) => r.detector !== "wildlife") ? allCompleted.filter((r) => r.detector !== "wildlife" || r.id === selectedRunId) : allCompleted;
   const activeRunId =
     selectedRunId && completedRuns.some((r) => r.id === selectedRunId)
       ? selectedRunId
@@ -197,6 +207,27 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
         .catch(() => undefined);
     }
   }, [source, activeRunId, boxes]);
+
+  // Wildlife run: its animals (species per track) and boxes.
+  const wildlifeId = wildlifeRun?.status === "completed" ? wildlifeRun.id : null;
+  useEffect(() => {
+    if (!source || !wildlifeId) return;
+    api.tracks(source.id, wildlifeId).then(setWildlifeTracks).catch(() => undefined);
+    if (!boxes[wildlifeId]) {
+      api.boxes(source.id, wildlifeId)
+        .then((b) => setBoxes((prev) => ({ ...prev, [wildlifeId]: b })))
+        .catch(() => undefined);
+    }
+  }, [source, wildlifeId, boxes]);
+  const wildlifeBoxes = wildlifeId ? boxes[wildlifeId] ?? null : null;
+  const speciesOverlay = useMemo(() => {
+    if (!selectedSpecies || !wildlifeBoxes) return null;
+    const group = wildlifeGroups(wildlifeBoxes, wildlifeTracks).find((g) => g.key === selectedSpecies);
+    if (!group) return null;
+    const labels: Record<number, string> = {};
+    for (const t of wildlifeTracks) labels[t.track_id] = wildlifeLabel(t);
+    return { boxes: wildlifeBoxes, label: wildlifeRun?.label ?? "", only: new Set(group.trackIds), labels };
+  }, [selectedSpecies, wildlifeBoxes, wildlifeTracks, wildlifeRun?.label]);
 
   const activeBoxes = activeRunId ? boxes[activeRunId] : undefined;
   const findings = useMemo(() => (activeBoxes ? computeFindings(activeBoxes, tracks) : null), [activeBoxes, tracks]);
@@ -389,7 +420,9 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
               source={source}
               session={session}
               analyzerIsMock={config?.analyzer_is_mock ?? false}
-              overlay={showBoxes && activeRun && activeBoxes ? { boxes: activeBoxes, label: activeRun.label ?? "", highlightTrack: selectedTrackId } : null}
+              overlay={
+                !showBoxes ? null : speciesOverlay ?? (activeRun && activeBoxes ? { boxes: activeBoxes, label: activeRun.label ?? "", highlightTrack: selectedTrackId } : null)
+              }
               boxesAvailable={Boolean(activeRun)}
               showBoxes={showBoxes}
               onToggleBoxes={setShowBoxes}
@@ -398,7 +431,24 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
               onRetryImport={source ? () => reimport(source.id) : undefined}
             />
 
-            {source && runs.length > 0 && (
+            {source && wildlifeRun && (
+              <WildlifePanel
+                run={wildlifeRun}
+                boxes={wildlifeBoxes}
+                tracks={wildlifeTracks}
+                selected={selectedSpecies}
+                onSelect={(key) => {
+                  setSelectedSpecies(key);
+                  setShowBoxes(true);
+                }}
+                onSeek={seek}
+                onAskAbout={ask}
+              />
+            )}
+
+            {source && LIVE_SOURCE_KINDS.has(source.kind) && <LiveInsights cameraId={source.id} onAskAbout={ask} />}
+
+            {source && !LIVE_SOURCE_KINDS.has(source.kind) && runs.length > 0 && (
               <Insights
                 findings={findings}
                 notableEvents={notableEvents}
@@ -407,8 +457,10 @@ export function Workspace({ user, onLogout }: { user: User; onLogout: () => void
                 onAnalyse={() => runVision("yolo", "bytetrack")}
                 onImport={() => reimport(source.id)}
                 onAskAbout={ask}
+                hideAnimals={wildlifeRun?.status === "completed"}
               />
             )}
+
 
             {source &&
               runs.length > 0 &&
